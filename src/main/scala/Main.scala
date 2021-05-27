@@ -9,6 +9,13 @@ class BarActor extends Actor {
   }
 }
 
+class TestActor extends Actor {
+  def receive = {
+    case msg =>
+      println(s"========> ${msg} & $me")
+
+  }
+}
 
 class FooActor(barRef: ActorRef) extends Actor {
   import Actor._
@@ -22,7 +29,9 @@ class FooActor(barRef: ActorRef) extends Actor {
       println(s"foo----> $msg & ${sender} & ${Thread.currentThread().getName}")
       sender ! "ping"
     case msg =>
-      throw new Exception("boom")
+      val ref = me.spawn(new TestActor, "asd")
+      println(s"~> ${ref}")
+      ref ! "1ewq"
       println(s"--------> $msg & ${sender}")
   }
 
@@ -38,8 +47,8 @@ object Main extends App {
 
   val bar = system.spawn(new BarActor, "bar")
   val foo = system.spawn(new FooActor(bar), "foo")
-  system.send(foo, StartGame)
-//  bar.send(foo, "asd")
+//  system.send(foo, StartGame)
+  bar.send(foo, "asd")
 //  foo.send(foo, "qwe")
 
   system.run()
