@@ -1,12 +1,23 @@
 package io.truerss.actorika
 
-import java.util.concurrent.{ConcurrentHashMap => CHM}
-import java.util.concurrent.{ConcurrentLinkedQueue => CLQ}
+import java.util.concurrent.{Executor, Executors, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
 import java.util.{ArrayList => AL}
 
 case class ActorSystem(systemName: String) {
 
   private val address: Address = Address(systemName)
+
+  private class ActorikaThreadFactory extends ThreadFactory {
+    override def newThread(r: Runnable): Thread = {
+      new Thread(r, systemName)
+    }
+  }
+
+  private val cores = Runtime.getRuntime.availableProcessors()
+
+  private val defaultExecutor: Executor = Executors.newFixedThreadPool(cores,
+    new ActorikaThreadFactory()
+  )
 
   // no messages for processing
   private val systemRef: ActorRef = ActorRef(address, new CLQ[ActorMessage](
@@ -25,6 +36,8 @@ case class ActorSystem(systemName: String) {
     val tmpMailbox = new CLQ[ActorMessage]()
     val ref = ActorRef(tmpAddress, tmpMailbox)
     actor.setMe(ref)
+    actor.withExecutor(defaultExecutor)
+
     val realActor = RealActor(actor, ref, this)
     Option(world.putIfAbsent(tmpAddress.name, realActor)) match {
       case Some(prev) if prev == realActor =>
@@ -47,7 +60,6 @@ case class ActorSystem(systemName: String) {
                   stop(ref)
                   isDone = true
                 case ActorStrategies.Restart =>
-
               }
           }
           counter = counter + 1

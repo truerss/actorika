@@ -14,7 +14,7 @@ trait Actor {
 
   private var _me: ActorRef = null
 
-  private var _executor: Executor = Executors.newCachedThreadPool()
+  private var _executor: Executor = Executors.newSingleThreadExecutor()
 
   protected implicit def current: ActorRef = me
 
@@ -31,7 +31,7 @@ trait Actor {
 
   protected def me: ActorRef = _me
 
-  protected var _sender: ActorRef = null
+  private var _sender: ActorRef = null
 
   private[actorika] def setSender(ref: ActorRef): Unit = {
     _sender = ref
