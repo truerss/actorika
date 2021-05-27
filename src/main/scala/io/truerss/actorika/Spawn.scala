@@ -1,13 +1,12 @@
 package io.truerss.actorika
 
-import java.util.concurrent.{Executor, Executors, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
-import java.util.{ArrayList => AL}
+import java.util.concurrent.{Executor, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
 
 trait Spawn {
   protected val address: Address
   protected val defaultExecutor: Executor
   protected val systemRef: ActorSystem
-  protected val world: CHM[String, RealActor] = new CHM[String, RealActor]()
+  private[actorika] val world: CHM[String, RealActor] = new CHM[String, RealActor]()
 
   // todo pass queue size and other settings
   def spawn(actor: Actor, name: String): ActorRef = {
@@ -19,6 +18,7 @@ trait Spawn {
     val tmpMailbox = new CLQ[ActorMessage]()
     val ref = ActorRef(tmpAddress, tmpMailbox, defaultExecutor, systemRef)
     actor.setMe(ref)
+    // todo setParent
     actor.withExecutor(defaultExecutor)
 
     val realActor = RealActor(actor, ref, systemRef)

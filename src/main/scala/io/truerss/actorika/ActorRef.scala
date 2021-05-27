@@ -11,10 +11,6 @@ case class ActorRef(
 
   val path: String = address.name
 
-//  override protected val defaultExecutor: Executor = _
-//  override protected val systemRef: ActorSystem = _
-
-  // ref ! msg
   def send(to: ActorRef, msg: Any): Unit = {
     val message = ActorMessage(msg, to, this)
     to.associatedMailbox.add(message)

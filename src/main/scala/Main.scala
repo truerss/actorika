@@ -12,7 +12,7 @@ class BarActor extends Actor {
 class TestActor extends Actor {
   def receive = {
     case msg =>
-      println(s"========> ${msg} & $me")
+      println(s"========> ${msg} & $me $sender")
 
   }
 }

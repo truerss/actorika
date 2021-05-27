@@ -1,7 +1,8 @@
 package io.truerss.actorika
 
 // internal
-private[actorika] case class RealActor(actor: Actor,
+private[actorika] case class RealActor(
+                     actor: Actor,
                      ref: ActorRef,
                      systemRef: ActorSystem
                     ) {
@@ -55,7 +56,10 @@ private[actorika] case class RealActor(actor: Actor,
         case None =>
           inProcess = false
       }
-
+    }
+    // and for children
+    ref.world.forEach { (_, actor) =>
+      actor.tick()
     }
   }
 

@@ -39,6 +39,14 @@ trait Actor {
 
   protected def sender: ActorRef = _sender
 
+  private var _parent: ActorRef = null
+
+  private[actorika] def setParent(ref: ActorRef): Unit = {
+    _parent = ref
+  }
+
+  protected def parent(): ActorRef = _parent
+
   def receive: Receive
 
   def applyRestartStrategy(ex: Throwable,
