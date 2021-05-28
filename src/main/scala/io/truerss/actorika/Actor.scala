@@ -63,15 +63,15 @@ trait Actor {
   def onUnhandled(msg: Any): Unit = {}
 
   def spawn(actor: Actor, name: String): ActorRef = {
-    system.spawn(actor, name, me, isRestart = false)
+    system.spawn(actor, name, me)
   }
 
   def stop(): Unit = {
-    me.send(me, Kill)
+    system.stop(me)
   }
 
   def stop(ref: ActorRef): Unit = {
-    me.send(ref, Kill)
+    system.stop(ref)
   }
 
   override def toString: String = s"Actor(${me.path})"
@@ -80,7 +80,7 @@ trait Actor {
 
 object Actor {
   implicit class ActorRefExt(val to: ActorRef) extends AnyVal {
-    def !(msg: String)(implicit from: ActorRef): Unit = {
+    def !(msg: Any)(implicit from: ActorRef): Unit = {
       from.send(to, msg)
     }
   }

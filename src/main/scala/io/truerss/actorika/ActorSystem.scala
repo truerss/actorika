@@ -5,10 +5,9 @@ import java.util.concurrent.{Executor, Executors, ThreadFactory, ConcurrentHashM
 import java.util.{ArrayList => AL}
 import scala.reflect.runtime.universe._
 
-
 case class ActorSystem(systemName: String) {
 
-  private val address: Address = Address(systemName)
+  val address: Address = Address(systemName)
 
   private[actorika] val world: CHM[String, RealActor] = new CHM[String, RealActor]()
 
@@ -27,10 +26,8 @@ case class ActorSystem(systemName: String) {
     new ActorikaThreadFactory()
   )
 
-  private val systemRef: ActorSystem = this
-
   // no messages for processing
-  private val system: ActorRef = ActorRef(
+  private val systemRef: ActorRef = ActorRef(
     address,
     isSystemRef = true,
     new CLQ[ActorMessage](new AL[ActorMessage](0))
@@ -38,19 +35,13 @@ case class ActorSystem(systemName: String) {
 
   // todo pass queue size and other settings
   def spawn(actor: Actor, name: String): ActorRef = {
-    spawn(actor, name, isRestart = false)
+    spawn(actor, name, systemRef)
   }
 
   private[actorika] def spawn(actor: Actor,
                               name: String,
-                              parent: ActorRef,
-                              isRestart: Boolean): ActorRef = {
-    val tmpAddress = if (parent.isSystemRef) {
-      // top
-      address.merge(name)
-    } else {
-      parent.address.merge(name)
-    }
+                              parent: ActorRef): ActorRef = {
+    val tmpAddress = defineAddress(name, parent)
     val tmpMailbox = new CLQ[ActorMessage]()
     val ref = ActorRef(tmpAddress, tmpMailbox)
     actor.setMe(ref)
@@ -58,53 +49,54 @@ case class ActorSystem(systemName: String) {
     actor.setParent(parent)
     actor.withExecutor(defaultExecutor) // todo from setup
 
-    val realActor = RealActor(actor, ref, systemRef)
+    val realActor = RealActor(actor, ref, this)
     Option(world.putIfAbsent(tmpAddress.name, realActor)) match {
       case Some(prev) if prev == realActor =>
         ref
       case None =>
-        var isDone = false
-        var counter = 1 // from preRestart part
-        while(!isDone) {
-          try {
-            if (isRestart) {
-              actor.preRestart()
-            }
-            actor.preStart()
-            isDone = true
-          } catch {
-            case ex: Throwable =>
-              actor.applyRestartStrategy(ex, None, counter) match {
-                case ActorStrategies.Stop =>
-                  actor.postStop()
-                  stop(ref)
-                  isDone = true
-                case ActorStrategies.Restart =>
-              }
-          }
-          counter = counter + 1
-        }
-
+        actor.preStart()
         ref
       case _ => throw new Exception(s"Actor#$name already present")
     }
   }
 
-  protected def spawn(actor: Actor, name: String, isRestart: Boolean): ActorRef = {
-    spawn(actor, name, system, isRestart)
+  private def defineAddress(name: String,
+                            parent: ActorRef): Address = {
+    if (parent.isSystemRef) {
+      // top
+      address.merge(name)
+    } else {
+      parent.address.merge(name)
+    }
   }
 
   def stop(ref: ActorRef): Unit = {
     // sync ?
-    world.remove(ref.path)
-    ref.associatedMailbox.clear()
+    Option(world.remove(ref.path)) match {
+      case Some(actor) =>
+        ref.associatedMailbox.clear()
+        actor.actor.postStop()
+      case _ =>
+        // actor was not found, ignore, warning ?
+    }
   }
 
-  def restart(actor: Actor, name: String): Unit = {
+  // restart = stop + start + clear mailbox nothing more
+  // todo also strategy check
+  def restart(actor: RealActor): Unit = {
     // lock probably
-    world.remove(name)
-    spawn(actor, name, isRestart = true)
+    actor.actor.preRestart()
+    actor.ref.associatedMailbox.clear()
+    actor.actor.postStop()
+    actor.actor.preStart()
   }
+
+  def restart(ref: ActorRef): Unit = {
+    Option(world.get(ref.path)).foreach { x =>
+      restart(x)
+    }
+  }
+
 
   // def registerDeadLetterChannel: Received => From, Option(to)
 
@@ -117,7 +109,7 @@ case class ActorSystem(systemName: String) {
   def publish[T](message: T)(implicit _tag: TypeTag[T]): Unit = {
     world.forEach { (_, actor) =>
       if (actor.canHandle(message)) {
-        system.send(actor.ref, message)
+        systemRef.send(actor.ref, message)
       }
     }
   }
@@ -133,7 +125,7 @@ case class ActorSystem(systemName: String) {
   }
 
   def send(to: ActorRef, msg: Any): Unit = {
-    val message = ActorMessage(msg, to, system)
+    val message = ActorMessage(msg, to, systemRef)
     to.associatedMailbox.add(message)
   }
 

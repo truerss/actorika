@@ -1,7 +1,5 @@
 import io.truerss.actorika._
-
-import scala.reflect.runtime.universe
-
+/*
 class BarActor extends Actor {
   import Actor._
   override def receive: Receive = {
@@ -67,3 +65,4 @@ object Main extends App {
 //  system.run()
 
 }
+*/

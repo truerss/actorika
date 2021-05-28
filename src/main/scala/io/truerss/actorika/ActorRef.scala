@@ -15,6 +15,10 @@ case class ActorRef(
     to.associatedMailbox.add(message)
   }
 
+  private[actorika] def hasMessages: Boolean = {
+    !associatedMailbox.isEmpty
+  }
+
   override def toString: String = s"ActorRef[@$path]"
 
 }
@@ -22,5 +26,9 @@ case class ActorRef(
 object ActorRef {
   def apply(address: Address, associatedMailbox: CLQ[ActorMessage]): ActorRef = {
     new ActorRef(address, isSystemRef = false, associatedMailbox)
+  }
+
+  def apply(address: Address): ActorRef = {
+    new ActorRef(address, isSystemRef = false, new CLQ[ActorMessage]())
   }
 }

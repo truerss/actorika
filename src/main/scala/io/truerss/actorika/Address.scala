@@ -9,7 +9,7 @@ package io.truerss.actorika
  * @param name
  */
 case class Address(name: String) {
-  require(name.matches("[a-zA-Z0-9/]*"))
+  require(name.matches("[a-zA-Z0-9/-]*"))
 
   def merge(other: Address): Address = {
     Address(s"$name/${other.name}")

@@ -1,6 +1,5 @@
 package io.truerss.actorika
 
-
 import java.util.concurrent.{ConcurrentLinkedQueue => CLQ}
 import scala.reflect.runtime.universe._
 
@@ -51,6 +50,7 @@ private[actorika] case class RealActor(
                   systemRef.stop(ref)
                 }
                 isDone = true
+                inProcess = false
               } catch {
                 case ex: Throwable =>
                   actor.applyRestartStrategy(ex, Some(receivedMessage), counter) match {
@@ -59,7 +59,7 @@ private[actorika] case class RealActor(
                       receivedMessage = ActorMessage(Kill, originalTo, originalSender)
                     case ActorStrategies.Restart =>
                       // work with system
-                      systemRef.restart(actor, ref.path)
+                      systemRef.restart(this)
                   }
               } finally {
                 counter = counter + 1
@@ -70,6 +70,7 @@ private[actorika] case class RealActor(
 
         case None =>
           inProcess = false
+          return // mailbox is empty
       }
     }
   }
@@ -79,26 +80,14 @@ private[actorika] case class RealActor(
 object RealActor {
   private final val empty = () => ()
 
-  implicit class ReceivedMessageExt(val msg: ActorMessage) extends AnyVal {
-    def after(actor: Actor): () => Unit = {
-      if (msg.isKill) {
-        () => actor.postStop()
-      } else {
-        empty
-      }
-    }
-  }
-
   implicit class ActorExt(val actor: Actor) extends AnyVal {
     def run(actorMessage: ActorMessage, callUserFunction: Boolean): Unit = {
-      val after = actorMessage.after(actor)
       actor.setSender(actorMessage.from)
-      if (actor.receive.isDefinedAt(actorMessage)) {
+      if (actor.receive.isDefinedAt(actorMessage.message)) {
         // I do not call user-receive because the function throw exception
         if (callUserFunction) {
           actor.receive.apply(actorMessage.message)
         }
-        after.apply()
       } else {
         // ignore system messages
         if (!actorMessage.isKill) {
