@@ -1,7 +1,9 @@
 package io.truerss.actorika
 
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{Executor, Executors, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
 import java.util.{ArrayList => AL}
+import scala.reflect.runtime.universe._
 
 
 case class ActorSystem(systemName: String) {
@@ -11,8 +13,11 @@ case class ActorSystem(systemName: String) {
   private[actorika] val world: CHM[String, RealActor] = new CHM[String, RealActor]()
 
   private class ActorikaThreadFactory extends ThreadFactory {
+    private final val counter = new AtomicInteger()
     override def newThread(r: Runnable): Thread = {
-      new Thread(r, systemName)
+      val t = new Thread(r)
+      t.setName(s"$systemName-pool-${counter.incrementAndGet()}")
+      t
     }
   }
 
@@ -102,6 +107,20 @@ case class ActorSystem(systemName: String) {
   }
 
   // def registerDeadLetterChannel: Received => From, Option(to)
+
+  def subscribe[T](ref: ActorRef, klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
+    Option(world.get(ref.path)).foreach { actor =>
+      actor.subscribe(klass)
+    }
+  }
+
+  def publish[T](message: T)(implicit _tag: TypeTag[T]): Unit = {
+    world.forEach { (_, actor) =>
+      if (actor.canHandle(message)) {
+        system.send(actor.ref, message)
+      }
+    }
+  }
 
   // todo in separate thread
   def run(): Unit = {

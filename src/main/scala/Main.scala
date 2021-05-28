@@ -1,8 +1,12 @@
 import io.truerss.actorika._
 
+import scala.reflect.runtime.universe
+
 class BarActor extends Actor {
   import Actor._
   override def receive: Receive = {
+    case StartGame =>
+      println("received!!!!!!!!!!!!!")
     case msg =>
       println(s"bar---> $msg & $sender & ${Thread.currentThread().getName}")
       sender ! "pong"
@@ -40,6 +44,7 @@ class FooActor(barRef: ActorRef) extends Actor {
   }
 }
 
+object StartGame
 
 object Main extends App {
 
@@ -47,10 +52,18 @@ object Main extends App {
 
   val bar = system.spawn(new BarActor, "bar")
   val foo = system.spawn(new FooActor(bar), "foo")
-//  system.send(foo, StartGame)
-  bar.send(foo, "asd")
-//  foo.send(foo, "qwe")
+
+  system.subscribe(bar, classOf[StartGame.type])
+  system.publish(StartGame)
 
   system.run()
+//  system.send(foo, StartGame)
+//  bar.send(foo, "asd")
+//  system.send(bar, "asd")
+//  system.subscribe(foo, classOf[String])
+//  foo.send(foo, "qwe")
+
+
+//  system.run()
 
 }

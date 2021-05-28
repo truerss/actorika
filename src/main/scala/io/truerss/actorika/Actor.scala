@@ -2,12 +2,6 @@ package io.truerss.actorika
 
 import java.util.concurrent.{Executor, Executors}
 
-/**
- * start actor = start infinite while loop ???
- *
- * @param name
- */
-
 trait Actor {
 
   final type Receive = PartialFunction[Any, Unit]
@@ -79,6 +73,8 @@ trait Actor {
   def stop(ref: ActorRef): Unit = {
     me.send(ref, Kill)
   }
+
+  override def toString: String = s"Actor(${me.path})"
 
 }
 

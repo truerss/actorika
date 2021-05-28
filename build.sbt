@@ -28,5 +28,6 @@ publishMavenStyle := true
 
 libraryDependencies ++= Seq(
   // todo slf4j
+  "org.scala-lang" % "scala-reflect" % "2.13.6",
   "org.scalameta" %% "munit" % "0.7.26" % Test
 )

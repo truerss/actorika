@@ -1,5 +1,9 @@
 package io.truerss.actorika
 
+
+import java.util.concurrent.{ConcurrentLinkedQueue => CLQ}
+import scala.reflect.runtime.universe._
+
 // internal
 private[actorika] case class RealActor(
                      actor: Actor,
@@ -9,7 +13,18 @@ private[actorika] case class RealActor(
 
   import RealActor._
 
+  private val subscriptions = new CLQ[Type]()
+
   @volatile private var inProcess = false
+
+  def subscribe[T](klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
+    subscriptions.add(_tag.tpe)
+  }
+
+  def canHandle[T](v: T)(implicit tag: TypeTag[T]): Boolean = {
+    // lst.exists(_ <:< tag.tpe)
+    subscriptions.contains(tag.tpe)
+  }
 
   def tick(): Unit = {
     if (!inProcess) {
