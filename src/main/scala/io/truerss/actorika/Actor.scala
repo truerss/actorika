@@ -47,6 +47,14 @@ trait Actor {
 
   protected def parent(): ActorRef = _parent
 
+  private var _system: ActorSystem = null
+
+  private[actorika] def setSystem(s: ActorSystem): Unit = {
+    _system = s
+  }
+
+  protected def system: ActorSystem = _system
+
   def receive: Receive
 
   def applyRestartStrategy(ex: Throwable,
@@ -59,6 +67,10 @@ trait Actor {
   def preRestart(): Unit = {}
 
   def onUnhandled(msg: Any): Unit = {}
+
+  def spawn(actor: Actor, name: String): ActorRef = {
+    system.spawn(actor, name, me, isRestart = false)
+  }
 
 }
 

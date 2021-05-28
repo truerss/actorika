@@ -1,13 +1,12 @@
 package io.truerss.actorika
 
-import java.util.concurrent.{Executor, ConcurrentLinkedQueue => CLQ}
+import java.util.concurrent.{ConcurrentLinkedQueue => CLQ}
 
 case class ActorRef(
                      address: Address,
-                     private[actorika] val associatedMailbox: CLQ[ActorMessage],
-                     protected override val defaultExecutor: Executor,
-                     protected override val systemRef: ActorSystem
-                   ) extends Spawn {
+                     private[actorika] val isSystemRef: Boolean,
+                     private[actorika] val associatedMailbox: CLQ[ActorMessage]
+                   ) {
 
   val path: String = address.name
 
@@ -18,4 +17,10 @@ case class ActorRef(
 
   override def toString: String = s"ActorRef[@$path]"
 
+}
+
+object ActorRef {
+  def apply(address: Address, associatedMailbox: CLQ[ActorMessage]): ActorRef = {
+    new ActorRef(address, isSystemRef = false, associatedMailbox)
+  }
 }

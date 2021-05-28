@@ -29,7 +29,7 @@ class FooActor(barRef: ActorRef) extends Actor {
       println(s"foo----> $msg & ${sender} & ${Thread.currentThread().getName}")
       sender ! "ping"
     case msg =>
-      val ref = me.spawn(new TestActor, "asd")
+      val ref = spawn(new TestActor, "asd")
       println(s"~> ${ref}")
       ref ! "1ewq"
       println(s"--------> $msg & ${sender}")

@@ -57,10 +57,6 @@ private[actorika] case class RealActor(
           inProcess = false
       }
     }
-    // and for children
-    ref.world.forEach { (_, actor) =>
-      actor.tick()
-    }
   }
 
 }

@@ -14,4 +14,8 @@ case class Address(name: String) {
   def merge(other: Address): Address = {
     Address(s"$name/${other.name}")
   }
+
+  def merge(tail: String): Address = {
+    Address(s"$name/$tail")
+  }
 }
