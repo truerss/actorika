@@ -20,6 +20,23 @@ system.send(fooRef, "test")
 
 ```
 
+### Event Stream 
+
+```scala
+import io.truerss.actorika._ 
+
+case class Message(id: Int)
+
+val system = ActorSystem("test")
+val fooRef = system.spawn(new FooActor, "foo")
+
+system.subscribe(fooRef, classOf[Message])
+
+// somewhere else
+system.publish(Message(1))
+```
+
+
 Library has lifecycles and recoverStrategies (Stop, Restart)
 
 ### note library does not support of cluster, persistence, streams and so on. 

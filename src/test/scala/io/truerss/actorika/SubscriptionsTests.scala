@@ -25,7 +25,9 @@ class SubscriptionsTests extends munit.FunSuite {
     val system = ActorSystem("test-system")
     val ref = system.spawn(new TestActor, "actor")
     val ref1 = system.spawn(new TestActor, "actor1")
+    val ref3 = system.spawn(new TestActor, "actor3")
     system.subscribe(ref, classOf[Message])
+    system.subscribe(ref3, classOf[Message])
     val xs = 0 to 10
     xs.foreach { x =>
       system.publish(Message(x))
@@ -33,12 +35,14 @@ class SubscriptionsTests extends munit.FunSuite {
     Thread.sleep(100)
     assertEquals(ref.associatedMailbox.size(), xs.size)
     assertEquals(ref1.associatedMailbox.size(), 0)
-    while (!ref.associatedMailbox.isEmpty) {
+    assertEquals(ref3.associatedMailbox.size(), xs.size)
+    while (ref.hasMessages || ref3.hasMessages) {
       system.world.forEach { (_, a) => a.tick() }
     }
     Thread.sleep(100)
     assertEquals(ref.associatedMailbox.size(), 0)
-    assertEquals(counter.get(), xs.size)
+    assertEquals(ref3.associatedMailbox.size(), 0)
+    assertEquals(counter.get(), xs.size*2)
     assertEquals(ref1.associatedMailbox.size(), 0)
   }
 
