@@ -72,6 +72,14 @@ trait Actor {
     system.spawn(actor, name, me, isRestart = false)
   }
 
+  def stop(): Unit = {
+    me.send(me, Kill)
+  }
+
+  def stop(ref: ActorRef): Unit = {
+    me.send(ref, Kill)
+  }
+
 }
 
 object Actor {
