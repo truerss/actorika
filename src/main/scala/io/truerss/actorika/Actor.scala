@@ -1,14 +1,21 @@
 package io.truerss.actorika
 
-import java.util.concurrent.{Executor, Executors}
+import java.util.concurrent.Executor
 
 trait Actor {
 
   final type Receive = PartialFunction[Any, Unit]
 
+  @volatile private[actorika] var state: ActorStates.ActorState =
+    ActorStates.Uninitialized
+
+  private[actorika] def moveStateTo(newState: ActorStates.ActorState): Unit = {
+    state = newState
+  }
+
   private var _me: ActorRef = null
 
-  private var _executor: Executor = Executors.newSingleThreadExecutor()
+  private var _executor: Executor = null
 
   protected implicit def current: ActorRef = me
 

@@ -92,6 +92,8 @@ class ActorTests extends munit.FunSuite {
     assertEquals(preStartCalled.get(), 1)
     assertEquals(system.world.size(), 1)
     assertEquals(ref.associatedMailbox.size(), 1)
+    val ra = system.world.get(ref.path)
+    assertEquals(ra.actor.state, ActorStates.Live)
     // try to restart
     system.restart(ref)
 
@@ -107,6 +109,7 @@ class ActorTests extends munit.FunSuite {
     assertEquals(preStartCalled.get(), 2)
     assertEquals(preRestartCalled.get(), 1)
     assertEquals(postStopCalled.get(), 2)
+    assertEquals(ra.actor.state, ActorStates.Stopped)
   }
 
   test("address must be unique") {

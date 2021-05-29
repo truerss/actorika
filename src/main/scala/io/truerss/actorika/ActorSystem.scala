@@ -3,6 +3,7 @@ package io.truerss.actorika
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{Executor, Executors, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
 import java.util.{ArrayList => AL}
+import scala.annotation.tailrec
 import scala.reflect.runtime.universe._
 
 case class ActorSystem(systemName: String) {
@@ -47,16 +48,38 @@ case class ActorSystem(systemName: String) {
     actor.setMe(ref)
     actor.setSystem(this)
     actor.setParent(parent)
-    actor.withExecutor(defaultExecutor) // todo from setup
+    if (actor.executor == null) {
+      actor.withExecutor(defaultExecutor)
+    }
 
     val realActor = RealActor(actor, ref, this)
+    // do not process messages before initialization
+    realActor.asUninitialized()
     Option(world.putIfAbsent(tmpAddress.name, realActor)) match {
       case Some(prev) if prev == realActor =>
         ref
       case None =>
-        actor.preStart()
+        // strategy
+        tryToStart(realActor)
         ref
       case _ => throw new Exception(s"Actor#$name already present")
+    }
+  }
+
+
+  private def tryToStart(realActor: RealActor, counter: Int = 0): Unit = {
+    try {
+      realActor.actor.preStart()
+      realActor.asLive()
+    } catch {
+      case ex: Throwable =>
+        realActor.actor.applyRestartStrategy(ex, None, counter) match {
+          case ActorStrategies.Stop =>
+            stop(realActor.ref)
+
+          case ActorStrategies.Restart =>
+            tryToStart(realActor, counter + 1)
+        }
     }
   }
 
@@ -71,11 +94,9 @@ case class ActorSystem(systemName: String) {
   }
 
   def stop(ref: ActorRef): Unit = {
-    // sync ?
     Option(world.remove(ref.path)) match {
       case Some(actor) =>
-        ref.associatedMailbox.clear()
-        actor.actor.postStop()
+       actor.stop()
       case _ =>
         // actor was not found, ignore, warning ?
     }

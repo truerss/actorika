@@ -16,6 +16,30 @@ private[actorika] case class RealActor(
 
   @volatile private var inProcess = false
 
+  // proxy call
+  def moveStateTo(to: ActorStates.ActorState): Unit = {
+    actor.moveStateTo(to)
+  }
+
+  def asUninitialized(): Unit = {
+    moveStateTo(ActorStates.Uninitialized)
+  }
+
+  def asLive(): Unit = {
+    moveStateTo(ActorStates.Live)
+  }
+
+  def asStopped(): Unit = {
+    moveStateTo(ActorStates.Stopped)
+  }
+
+  // lock ?
+  def stop(): Unit = {
+    ref.associatedMailbox.clear()
+    asStopped()
+    actor.actor.postStop()
+  }
+
   def subscribe[T](klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
     subscriptions.add(_tag.tpe)
   }
@@ -26,6 +50,17 @@ private[actorika] case class RealActor(
   }
 
   def tick(): Unit = {
+    actor.state match {
+      case ActorStates.Live =>
+        tick1()
+      case ActorStates.Uninitialized =>
+        // skip
+      case ActorStates.Stopped =>
+        // to system deadletters todo
+    }
+  }
+
+  private def tick1(): Unit = {
     if (!inProcess) {
       Option(ref.associatedMailbox.poll()) match {
         case Some(message) =>
