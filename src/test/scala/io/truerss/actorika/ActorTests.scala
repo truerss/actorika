@@ -133,13 +133,15 @@ class ActorTests extends munit.FunSuite {
     val ref = system.spawn(new TestActor, "actor")
     system.send(ref, Stop)
     system.send(ref, "asd")
-    system.world.get(ref.path).tick()
+    val ra = system.world.get(ref.path)
+    ra.tick()
     // sync time +-
     Thread.sleep(100)
     assertEquals(system.world.size(), 0)
     assertEquals(ref.associatedMailbox.size(), 0)
     assertEquals(postStopCalled.get(), 1)
     assertEquals(preRestartCalled.get(), 0)
+    assertEquals(ra.actor.state, ActorStates.Stopped)
   }
 
   test("check system and context") {
@@ -199,6 +201,26 @@ class ActorTests extends munit.FunSuite {
     Thread.sleep(100)
     assertEquals(mailbox.size(), xs.size)
     assertEquals(mailbox.asScala.toVector, xs.toVector)
+  }
+
+  test("do not process messages no in appropriate state") {
+    val system = ActorSystem("test-system")
+    val ref = system.spawn(new FooActor, "test")
+    val xs = (0 to 10)
+    xs.foreach { x =>
+      system.send(ref, x)
+    }
+    val ra = system.world.get(ref.path)
+    // actor is ready
+    assertEquals(ra.actor.state, ActorStates.Live)
+    assertEquals(ref.associatedMailbox.size, xs.size)
+    ra.moveStateTo(ActorStates.Uninitialized)
+    assertEquals(ra.actor.state, ActorStates.Uninitialized)
+    (0 to 10).foreach { _ =>
+      ra.tick()
+    }
+    Thread.sleep(100)
+    assertEquals(ref.associatedMailbox.size, xs.size)
   }
 
 }

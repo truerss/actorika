@@ -28,6 +28,12 @@ class ActorStrategiesTests extends munit.FunSuite {
     override def preRestart(): Unit = restartCounter.incrementAndGet()
   }
 
+  private trait Empty { self: Actor =>
+    override def receive: Receive = {
+      case _ =>
+    }
+  }
+
   private class StopStrategy extends CommonLT {
     override def receive: Receive = {
       case _ =>
@@ -52,11 +58,39 @@ class ActorStrategiesTests extends munit.FunSuite {
     }
   }
 
-  private class FailedOnRestart extends CommonLT {
-    override def receive: Receive = {
-      case _ =>
+  private class ExceptionInPreStartAndStopStrategy extends CommonLT with Empty {
+    override def preStart(): Unit = {
+      startCounter.incrementAndGet()
+      throw new Exception("boom")
     }
   }
+
+  private class ExceptionInPreStartAndRestartStrategy extends CommonLT with Empty {
+    override def preStart(): Unit = {
+      startCounter.incrementAndGet()
+      throw new Exception("boom")
+    }
+    override def applyRestartStrategy(ex: Throwable, failedMessage: Option[Any], count: Int): ActorStrategies.Value = {
+      receivedExceptions.add(ex)
+      failedMessage.foreach { x => receivedMessages.add(x) }
+      if (count == 3) {
+        ActorStrategies.Stop
+      } else {
+        ActorStrategies.Restart
+      }
+    }
+  }
+
+  private class IgnoreExceptionInPostStop extends CommonLT with Empty {
+    override def postStop(): Unit = {
+      stopCounter.incrementAndGet()
+      throw new Exception("boom")
+    }
+  }
+
+  private class FailedOnRestart extends CommonLT with Empty {
+  }
+
 
   test("check stop strategy") {
     reset()
@@ -98,6 +132,46 @@ class ActorStrategiesTests extends munit.FunSuite {
     assertEquals(startCounter.get(), 5)
     assertEquals(receivedMessages.size(), 4)
     assertEquals(receivedExceptions.size(), 4)
+  }
+
+  test("exception in preStart#Stop") {
+    reset()
+    val system = ActorSystem("system")
+    val ref = system.spawn(new ExceptionInPreStartAndStopStrategy, "test")
+    Thread.sleep(100)
+    val ra = system.world.get(ref.path)
+    assert(Option(ra).isEmpty)
+    assertEquals(stopCounter.get(), 1)
+    assertEquals(startCounter.get(), 1)
+    assertEquals(restartCounter.get(), 0)
+  }
+
+  test("exception in preStart#Restart") {
+    reset()
+    val system = ActorSystem("system")
+    val ref = system.spawn(new ExceptionInPreStartAndRestartStrategy, "test")
+    Thread.sleep(100)
+    val ra = system.world.get(ref.path)
+    // stopped after all
+    // do not present in world
+    assert(Option(ra).isEmpty)
+    assertEquals(stopCounter.get(), 1)
+    assertEquals(startCounter.get(), 3)
+    assertEquals(restartCounter.get(), 0)
+    assertEquals(receivedMessages.size(), 0)
+    assertEquals(receivedExceptions.size(), 3)
+  }
+
+  test("ignore exceptions in postStop") {
+    reset()
+    val system = ActorSystem("system")
+    val ref = system.spawn(new IgnoreExceptionInPostStop, "test")
+    val ra = system.world.get(ref.path)
+    assertEquals(ra.actor.state, ActorStates.Live)
+    // ok, stop the actor
+    system.stop(ref)
+    assertEquals(stopCounter.get(), 1)
+    assertEquals(ra.actor.state, ActorStates.Stopped)
   }
 
 

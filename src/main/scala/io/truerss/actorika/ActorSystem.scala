@@ -3,7 +3,6 @@ package io.truerss.actorika
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{Executor, Executors, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
 import java.util.{ArrayList => AL}
-import scala.annotation.tailrec
 import scala.reflect.runtime.universe._
 
 case class ActorSystem(systemName: String) {
@@ -67,7 +66,7 @@ case class ActorSystem(systemName: String) {
   }
 
 
-  private def tryToStart(realActor: RealActor, counter: Int = 0): Unit = {
+  private def tryToStart(realActor: RealActor, counter: Int = 1): Unit = {
     try {
       realActor.actor.preStart()
       realActor.asLive()
@@ -93,6 +92,7 @@ case class ActorSystem(systemName: String) {
     }
   }
 
+  // @note any exceptions in `stop` will be ignored
   def stop(ref: ActorRef): Unit = {
     Option(world.remove(ref.path)) match {
       case Some(actor) =>

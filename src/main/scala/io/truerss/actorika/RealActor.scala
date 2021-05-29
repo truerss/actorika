@@ -37,7 +37,12 @@ private[actorika] case class RealActor(
   def stop(): Unit = {
     ref.associatedMailbox.clear()
     asStopped()
-    actor.actor.postStop()
+    try {
+      actor.actor.postStop()
+    } catch {
+      case _: Throwable =>
+        // log
+    }
   }
 
   def subscribe[T](klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
