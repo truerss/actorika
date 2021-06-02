@@ -1,16 +1,18 @@
 package io.truerss.actorika
 
-import java.util.concurrent.Executor
+import java.util.concurrent.{Executor, ConcurrentLinkedQueue => CLQ}
 
 trait Actor {
 
   final type Receive = PartialFunction[Any, Unit]
 
-  @volatile private[actorika] var state: ActorStates.ActorState =
+  @volatile private[actorika] var _state: ActorStates.ActorState =
     ActorStates.Uninitialized
 
-  private[actorika] def moveStateTo(newState: ActorStates.ActorState): Unit = {
-    state = newState
+  private[actorika] val _children = new CLQ[String]()
+
+  protected[actorika] def moveStateTo(newState: ActorStates.ActorState): Unit = {
+    _state = newState
   }
 
   private var _me: ActorRef = null
@@ -40,7 +42,7 @@ trait Actor {
 
   protected def sender: ActorRef = _sender
 
-  private var _parent: ActorRef = null
+  private[actorika] var _parent: ActorRef = null
 
   private[actorika] def setParent(ref: ActorRef): Unit = {
     _parent = ref
@@ -60,7 +62,37 @@ trait Actor {
 
   def applyRestartStrategy(ex: Throwable,
                            failedMessage: Option[Any],
-                           count: Int): ActorStrategies.Value = ActorStrategies.Stop
+                           count: Int): ActorStrategies.Value = ActorStrategies.Parent
+
+  private[actorika] def resolveStrategy(ex: Throwable,
+                                        failedMessage: Option[Any],
+                                        count: Int): ActorStrategies.Value = {
+    applyRestartStrategy(ex, failedMessage, count) match {
+      case ActorStrategies.Parent =>
+        val tmp = system.resolveStrategy(me)
+        // 0 is checked ^
+        resolveAndApply(ex, failedMessage, count, 1, tmp)
+
+      case x => x
+    }
+  }
+
+  private def resolveAndApply(ex: Throwable,
+                              failedMessage: Option[Any],
+                              count: Int,
+                              index: Int,
+                              strategies: Vector[ActorSystem.StrategyF]
+                             ): ActorStrategies.Value = {
+    if (index >= strategies.size) {
+      ActorStrategies.Stop
+    } else {
+      strategies(index).apply(ex, failedMessage, count) match {
+        case ActorStrategies.Parent =>
+          resolveAndApply(ex, failedMessage, count, index + 1, strategies)
+        case x => x
+      }
+    }
+  }
 
   // life cycle
   def preStart(): Unit = {}
@@ -70,7 +102,9 @@ trait Actor {
   def onUnhandled(msg: Any): Unit = {}
 
   def spawn(actor: Actor, name: String): ActorRef = {
-    system.spawn(actor, name, me)
+    val ref = system.spawn(actor, name, me)
+    _children.add(ref.path)
+    ref
   }
 
   def stop(): Unit = {
@@ -81,7 +115,11 @@ trait Actor {
     system.stop(ref)
   }
 
-  override def toString: String = s"Actor(${me.path})"
+  private[actorika] def stop(path: String): Unit = {
+    system.stop(path)
+  }
+
+  override def toString: String = s"Actor(${me.path}:${_state})"
 
 }
 

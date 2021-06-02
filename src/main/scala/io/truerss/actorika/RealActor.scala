@@ -1,20 +1,24 @@
 package io.truerss.actorika
 
 import java.util.concurrent.{ConcurrentLinkedQueue => CLQ}
+import scala.collection.mutable.{ArrayBuffer => AB}
 import scala.reflect.runtime.universe._
 
 // internal
 private[actorika] case class RealActor(
-                     actor: Actor,
-                     ref: ActorRef,
-                     systemRef: ActorSystem
+                      actor: Actor,
+                      ref: ActorRef,
+                      system: ActorSystem
                     ) {
 
   import RealActor._
+  import ActorSystem.{logger, StrategyF}
 
   private val subscriptions = new CLQ[Type]()
 
   @volatile private var inProcess = false
+
+  private val path = ref.path
 
   // proxy call
   def moveStateTo(to: ActorStates.ActorState): Unit = {
@@ -36,12 +40,13 @@ private[actorika] case class RealActor(
   // lock ?
   def stop(): Unit = {
     ref.associatedMailbox.clear()
+    actor._children.forEach { x => actor.stop(x) }
     asStopped()
     try {
       actor.actor.postStop()
     } catch {
-      case _: Throwable =>
-        // log
+      case ex: Throwable =>
+        logger.warn(s"Exception in 'postStop'-method in $path-actor", ex)
     }
   }
 
@@ -50,18 +55,19 @@ private[actorika] case class RealActor(
   }
 
   def canHandle[T](v: T)(implicit tag: TypeTag[T]): Boolean = {
-    // lst.exists(_ <:< tag.tpe)
     subscriptions.contains(tag.tpe)
   }
 
   def tick(): Unit = {
-    actor.state match {
+    actor._state match {
       case ActorStates.Live =>
         tick1()
       case ActorStates.Uninitialized =>
         // skip
       case ActorStates.Stopped =>
-        // to system deadletters todo
+        Option(ref.associatedMailbox.poll()).foreach { am =>
+          system._deadLettersHandler.apply(am.message, am.to, am.from)
+        }
     }
   }
 
@@ -87,20 +93,27 @@ private[actorika] case class RealActor(
                 actor.run(receivedMessage, callNow)
                 exceptionInUserDefinedFunction = false
                 if (receivedMessage.isKill) {
-                  systemRef.stop(ref)
+                  system.stop(ref)
                 }
                 isDone = true
-                inProcess = false
               } catch {
                 case ex: Throwable =>
-                  actor.applyRestartStrategy(ex, Some(receivedMessage), counter) match {
+                  val strategy = actor.resolveStrategy(ex, Some(receivedMessage.message), counter)
+
+                  logger.warn(s"Exception in ${ref.path} actor, apply: $strategy-strategy", ex)
+
+                  strategy match {
                     case ActorStrategies.Stop =>
-                      // change message, the actor will be stopped with next iteration
+                      // change message, the actor will be stopped with the next iteration
                       receivedMessage = ActorMessage(Kill, originalTo, originalSender)
                     case ActorStrategies.Restart =>
                       // work with system
-                      systemRef.restart(this)
+                      tryToRestart(Vector(ex), Some(message.message))
+
+                    case ActorStrategies.Parent =>
+                      throw new IllegalStateException(illegalState)
                   }
+
               } finally {
                 counter = counter + 1
               }
@@ -115,11 +128,99 @@ private[actorika] case class RealActor(
     }
   }
 
+  private def illegalState: String = {
+    s"Failed to resolve correct strategy: $ref"
+  }
+
+  private[actorika] def tryToRestart(stack: Vector[Throwable],
+                                     originalMessage: Option[Any]): Unit = {
+    asUninitialized() // stop process messages
+    val result = runWhile(
+      originalMessage = originalMessage,
+      currentStack = stack,
+      onTryBlock = () => {
+        actor.preRestart()
+      },
+      onStopBlock = () => {
+        system.stop(ref)
+      },
+      onRestartBlock = () => {}
+    )
+
+    if (!result.isStopCalled) {
+      // do not clear world
+      stop()
+      tryToStart()
+    }
+  }
+
+  private[actorika] def tryToStart(): Unit = {
+    // do not process messages before initialization
+    asUninitialized()
+    runWhile(
+      originalMessage = None,
+      currentStack = Vector.empty,
+      onTryBlock = () => {
+        actor.preStart()
+        asLive()
+      },
+      onStopBlock = () => {
+        system.stop(ref)
+      },
+      onRestartBlock = () => {}
+    )
+
+  }
+
+  private def runWhile(
+                        originalMessage: Option[Any],
+                        currentStack: Vector[Throwable],
+                        onTryBlock: () => Unit,
+                        onStopBlock: () => Unit,
+                        onRestartBlock: () => Unit
+                      ): RunWhileResult = {
+    val max = system.settings.maxRestartCount
+    var isDone = false
+    var counter = 1
+    var isStopCalled = false
+    val buffer = currentStack.to(AB)
+    while (!isDone) {
+      try {
+        onTryBlock.apply()
+        isDone = true
+      } catch {
+        case ex: Throwable =>
+          buffer += ex
+          val strategy = if (counter > max) {
+            logger.warn(s"Overlimit in restarts (default=$max), $path-actor will be stopped")
+            ActorStrategies.Stop
+          } else {
+            actor.resolveStrategy(ex, originalMessage, counter)
+          }
+          strategy match {
+            case ActorStrategies.Stop =>
+              onStopBlock.apply()
+              isStopCalled = true
+              isDone = true
+
+            case ActorStrategies.Restart =>
+              onRestartBlock.apply()
+              counter = counter + 1
+
+            case ActorStrategies.Parent =>
+              throw new IllegalStateException(illegalState)
+          }
+      }
+
+    }
+    RunWhileResult(isStopCalled, buffer.toVector)
+  }
+
 }
 
 object RealActor {
-  private final val empty = () => ()
 
+  case class RunWhileResult(isStopCalled: Boolean, stack: Vector[Throwable])
   implicit class ActorExt(val actor: Actor) extends AnyVal {
     def run(actorMessage: ActorMessage, callUserFunction: Boolean): Unit = {
       actor.setSender(actorMessage.from)

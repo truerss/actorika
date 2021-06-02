@@ -9,13 +9,18 @@ package io.truerss.actorika
  * @param name
  */
 case class Address(name: String) {
-  require(name.matches("[a-zA-Z0-9/-]*"))
-
   def merge(other: Address): Address = {
     Address(s"$name/${other.name}")
   }
 
   def merge(tail: String): Address = {
     Address(s"$name/$tail")
+  }
+}
+
+object Address {
+  val rx = "[a-zA-Z0-9/-]*"
+  def isValid(input: String): Boolean = {
+    input.matches(rx)
   }
 }

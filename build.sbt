@@ -2,6 +2,8 @@ name := "actorika"
 
 version := "0.0.1"
 
+version := "0.0.1-SNAPSHOT"
+
 scalaVersion := "2.13.6"
 
 organization := "io.github.truerss"
@@ -27,7 +29,8 @@ licenses += ("MIT", url("http://opensource.org/licenses/MIT"))
 publishMavenStyle := true
 
 libraryDependencies ++= Seq(
-  // todo slf4j
-  "org.scala-lang" % "scala-reflect" % "2.13.6",
+  "org.slf4j" % "slf4j-api" % "1.7.30" % s"$Test,$Provided",
+  "ch.qos.logback" % "logback-classic" % "1.2.3" % s"$Test,$Provided",
+  "org.scala-lang" % "scala-reflect" % "2.13.6" % Provided,
   "org.scalameta" %% "munit" % "0.7.26" % Test
 )

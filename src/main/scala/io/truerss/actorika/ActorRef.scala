@@ -11,8 +11,14 @@ case class ActorRef(
   val path: String = address.name
 
   def send(to: ActorRef, msg: Any): Unit = {
-    val message = ActorMessage(msg, to, this)
-    to.associatedMailbox.add(message)
+    if (to.isSystemRef) {
+      throw new IllegalArgumentException(
+        s"You're trying to send $msg to the system-mailbox, it's not possible"
+      )
+    } else {
+      val message = ActorMessage(msg, to, this)
+      to.associatedMailbox.add(message)
+    }
   }
 
   private[actorika] def hasMessages: Boolean = {

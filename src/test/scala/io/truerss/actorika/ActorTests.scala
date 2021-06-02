@@ -93,7 +93,7 @@ class ActorTests extends munit.FunSuite {
     assertEquals(system.world.size(), 1)
     assertEquals(ref.associatedMailbox.size(), 1)
     val ra = system.world.get(ref.path)
-    assertEquals(ra.actor.state, ActorStates.Live)
+    assertEquals(ra.actor._state, ActorStates.Live)
     // try to restart
     system.restart(ref)
 
@@ -109,7 +109,7 @@ class ActorTests extends munit.FunSuite {
     assertEquals(preStartCalled.get(), 2)
     assertEquals(preRestartCalled.get(), 1)
     assertEquals(postStopCalled.get(), 2)
-    assertEquals(ra.actor.state, ActorStates.Stopped)
+    assertEquals(ra.actor._state, ActorStates.Stopped)
   }
 
   test("address must be unique") {
@@ -141,7 +141,7 @@ class ActorTests extends munit.FunSuite {
     assertEquals(ref.associatedMailbox.size(), 0)
     assertEquals(postStopCalled.get(), 1)
     assertEquals(preRestartCalled.get(), 0)
-    assertEquals(ra.actor.state, ActorStates.Stopped)
+    assertEquals(ra.actor._state, ActorStates.Stopped)
   }
 
   test("check system and context") {
@@ -154,7 +154,7 @@ class ActorTests extends munit.FunSuite {
     assertEquals(_currentSystem, system)
     assert(_currentSender.isSystemRef)
     assertEquals(_currentSender.path, system.systemName)
-    assert(_currentThreadName.startsWith(s"${system.address.name}-pool-"))
+    assert(_currentThreadName.startsWith(s"${system.address.name}-default-pool-"))
   }
 
   test("create sub-actors") {
@@ -212,15 +212,28 @@ class ActorTests extends munit.FunSuite {
     }
     val ra = system.world.get(ref.path)
     // actor is ready
-    assertEquals(ra.actor.state, ActorStates.Live)
+    assertEquals(ra.actor._state, ActorStates.Live)
     assertEquals(ref.associatedMailbox.size, xs.size)
     ra.moveStateTo(ActorStates.Uninitialized)
-    assertEquals(ra.actor.state, ActorStates.Uninitialized)
+    assertEquals(ra.actor._state, ActorStates.Uninitialized)
     (0 to 10).foreach { _ =>
       ra.tick()
     }
     Thread.sleep(100)
     assertEquals(ref.associatedMailbox.size, xs.size)
+  }
+
+  test("send to systemRef") {
+    val system = ActorSystem("test")
+    val ref = system.spawn(new FooActor, "test")
+    val systemRef = ActorRef(Address("asd"), true, null)
+    try {
+      ref.send(systemRef, "asd")
+      assert(false)
+    } catch {
+      case ex: IllegalArgumentException =>
+        assert(ex.getMessage.contains("You're trying to send"))
+    }
   }
 
 }

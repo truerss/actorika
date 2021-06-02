@@ -1,7 +1,5 @@
 package io.truerss.actorika
 
-import munit.Location
-
 class AddressTests extends munit.FunSuite {
 
   test("merge") {
@@ -16,36 +14,16 @@ class AddressTests extends munit.FunSuite {
   }
 
   test("requirements check") {
-    checkOk(() => Address("asd"))
-    checkOk(() => Address("123"))
-    checkOk(() => Address("123/asd"))
-    checkOk(() => Address("123/asd-qwe"))
-    checkOk(() => Address("123"))
+    assert(Address.isValid("asd"))
+    assert(Address.isValid("123"))
+    assert(Address.isValid("123/asd"))
+    assert(Address.isValid("123/asd-qwe"))
   }
 
   test("failed requirements") {
-    checkNotOk(() => Address("#"))
-    checkNotOk(() => Address("?123"))
-    checkNotOk(() => Address("@!asd"))
-  }
-
-  private def checkOk(f: () => Address)(implicit loc: Location): Unit = {
-    try {
-      assert(f().name.nonEmpty)
-    } catch {
-      case _: Throwable =>
-        assert(false, "Oops, check the code")
-    }
-  }
-
-  private def checkNotOk(f: () => Address)(implicit loc: Location): Unit = {
-    try {
-      f()
-      assert(false)
-    } catch {
-      case _: Throwable =>
-        assert(true)
-    }
+    assert(!Address.isValid("#"))
+    assert(!Address.isValid("?123"))
+    assert(!Address.isValid("@!asd"))
   }
 
 }

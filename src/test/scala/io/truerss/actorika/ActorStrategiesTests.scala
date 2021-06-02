@@ -5,6 +5,9 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class ActorStrategiesTests extends munit.FunSuite {
 
+  import scala.jdk.CollectionConverters._
+  import ActorStates._
+
   private val stopCounter = new AtomicInteger(0)
   private val startCounter = new AtomicInteger(0)
   private val restartCounter = new AtomicInteger(0)
@@ -12,15 +15,22 @@ class ActorStrategiesTests extends munit.FunSuite {
   private val receivedExceptions = new ConcurrentLinkedQueue[Throwable]()
   private val receivedMessages = new ConcurrentLinkedQueue[Any]()
 
+  private val states = new ConcurrentLinkedQueue[ActorStates.ActorState]()
+
   private def reset(): Unit = {
     stopCounter.set(0)
     startCounter.set(0)
     restartCounter.set(0)
     receivedExceptions.clear()
     receivedMessages.clear()
+    states.clear()
   }
 
   private trait CommonLT extends Actor {
+    override protected[actorika] def moveStateTo(newState: ActorState): Unit = {
+      states.add(newState)
+      super.moveStateTo(newState)
+    }
     override def preStart(): Unit = startCounter.incrementAndGet()
 
     override def postStop(): Unit = stopCounter.incrementAndGet()
@@ -34,6 +44,18 @@ class ActorStrategiesTests extends munit.FunSuite {
     }
   }
 
+  private trait RestartStrategyImpl { self: Actor =>
+    override def applyRestartStrategy(ex: Throwable, failedMessage: Option[Any], count: Int): ActorStrategies.Value = {
+      receivedExceptions.add(ex)
+      failedMessage.foreach { x => receivedMessages.add(x) }
+      if (count == 3) {
+        ActorStrategies.Stop
+      } else {
+        ActorStrategies.Restart
+      }
+    }
+  }
+
   private class StopStrategy extends CommonLT {
     override def receive: Receive = {
       case _ =>
@@ -41,17 +63,7 @@ class ActorStrategiesTests extends munit.FunSuite {
     }
   }
 
-  private class RestartStrategy extends CommonLT {
-    override def applyRestartStrategy(ex: Throwable, failedMessage: Option[Any], count: Int): ActorStrategies.Value = {
-      receivedExceptions.add(ex)
-      failedMessage.foreach { x => receivedMessages.add(x) }
-      if (count > 3) {
-        ActorStrategies.Stop
-      } else {
-        ActorStrategies.Restart
-      }
-    }
-
+  private class RestartStrategy extends CommonLT with RestartStrategyImpl {
     override def receive: Receive = {
       case _ =>
         throw new Exception("boom")
@@ -70,14 +82,10 @@ class ActorStrategiesTests extends munit.FunSuite {
       startCounter.incrementAndGet()
       throw new Exception("boom")
     }
-    override def applyRestartStrategy(ex: Throwable, failedMessage: Option[Any], count: Int): ActorStrategies.Value = {
-      receivedExceptions.add(ex)
-      failedMessage.foreach { x => receivedMessages.add(x) }
-      if (count == 3) {
-        ActorStrategies.Stop
-      } else {
-        ActorStrategies.Restart
-      }
+
+    override def receive: Receive = {
+      case _ =>
+        throw new Exception("boom")
     }
   }
 
@@ -88,7 +96,15 @@ class ActorStrategiesTests extends munit.FunSuite {
     }
   }
 
-  private class FailedOnRestart extends CommonLT with Empty {
+  private class FailedOnRestart extends CommonLT with Empty with RestartStrategyImpl {
+    override def preRestart(): Unit = {
+      restartCounter.incrementAndGet()
+      throw new Exception("preRestart")
+    }
+    override def receive: Receive = {
+      case _ =>
+        throw new Exception("boom")
+    }
   }
 
 
@@ -105,6 +121,7 @@ class ActorStrategiesTests extends munit.FunSuite {
     assertEquals(stopCounter.get(), 1)
     assertEquals(startCounter.get(), 1)
     assertEquals(restartCounter.get(), 0)
+    assertEquals(states.asScala.toVector, Vector(Uninitialized, Live, Stopped))
   }
 
   test("restart strategy") {
@@ -124,14 +141,20 @@ class ActorStrategiesTests extends munit.FunSuite {
     assertEquals(stopCounter.get(), 1)
     assertEquals(startCounter.get(), 2)
     assertEquals(restartCounter.get(), 1)
+    assertEquals(
+      states.asScala.toVector,
+      Vector(
+        Uninitialized, Live, // started
+        Uninitialized, Stopped, // message passed
+        Uninitialized, Live // restarted
+      )
+    )
     again()
-    again()
-    again()
-    assertEquals(stopCounter.get(), 4)
-    assertEquals(restartCounter.get(), 4)
-    assertEquals(startCounter.get(), 5)
-    assertEquals(receivedMessages.size(), 4)
-    assertEquals(receivedExceptions.size(), 4)
+    assertEquals(stopCounter.get(), 2)
+    assertEquals(restartCounter.get(), 2)
+    assertEquals(startCounter.get(), 3)
+    assertEquals(receivedMessages.size(), 2)
+    assertEquals(receivedExceptions.size(), 2)
   }
 
   test("exception in preStart#Stop") {
@@ -144,22 +167,10 @@ class ActorStrategiesTests extends munit.FunSuite {
     assertEquals(stopCounter.get(), 1)
     assertEquals(startCounter.get(), 1)
     assertEquals(restartCounter.get(), 0)
-  }
-
-  test("exception in preStart#Restart") {
-    reset()
-    val system = ActorSystem("system")
-    val ref = system.spawn(new ExceptionInPreStartAndRestartStrategy, "test")
-    Thread.sleep(100)
-    val ra = system.world.get(ref.path)
-    // stopped after all
-    // do not present in world
-    assert(Option(ra).isEmpty)
-    assertEquals(stopCounter.get(), 1)
-    assertEquals(startCounter.get(), 3)
-    assertEquals(restartCounter.get(), 0)
-    assertEquals(receivedMessages.size(), 0)
-    assertEquals(receivedExceptions.size(), 3)
+    assertEquals(
+      states.asScala.toVector,
+      Vector(Uninitialized, Stopped) // start and stop
+    )
   }
 
   test("ignore exceptions in postStop") {
@@ -167,11 +178,63 @@ class ActorStrategiesTests extends munit.FunSuite {
     val system = ActorSystem("system")
     val ref = system.spawn(new IgnoreExceptionInPostStop, "test")
     val ra = system.world.get(ref.path)
-    assertEquals(ra.actor.state, ActorStates.Live)
+    assertEquals(ra.actor._state, ActorStates.Live)
     // ok, stop the actor
     system.stop(ref)
     assertEquals(stopCounter.get(), 1)
-    assertEquals(ra.actor.state, ActorStates.Stopped)
+    assertEquals(ra.actor._state, ActorStates.Stopped)
+    assertEquals(
+      states.asScala.toVector,
+      Vector(
+        Uninitialized, Live, Stopped
+      )
+    )
+  }
+
+  test("exception in preRestart#Restart") {
+    reset()
+    val system = ActorSystem("system")
+    val ref = system.spawn(new FailedOnRestart, "test123")
+    val ra = system.world.get(ref.path)
+    assertEquals(ra.actor._state, ActorStates.Live)
+    system.send(ref, "boom")
+    while (ref.hasMessages) {
+      ra.tick()
+    }
+    Thread.sleep(100)
+    assertEquals(ra.actor._state, Stopped)
+    assertEquals(restartCounter.get(), 3)
+    assertEquals(receivedMessages.size(), 4)
+    assertEquals(receivedExceptions.size(), 4)
+    assertEquals(
+      receivedExceptions.asScala.map(_.getMessage).toVector,
+      Vector("boom", "preRestart", "preRestart", "preRestart")
+    )
+  }
+
+  test("overlimitting in restarts") {
+    reset()
+    val system = ActorSystem("system", ActorSystemSettings(
+      handleDeadLetters = false,
+      maxRestartCount = 2,
+      defaultExecutor = null
+    ))
+    val ref = system.spawn(new FailedOnRestart, "test123")
+    val ra = system.world.get(ref.path)
+    assertEquals(ra.actor._state, ActorStates.Live)
+    system.send(ref, "boom")
+    while (ref.hasMessages) {
+      ra.tick()
+    }
+    Thread.sleep(100)
+    assertEquals(ra.actor._state, Stopped)
+    assertEquals(restartCounter.get(), 3)
+    assertEquals(receivedMessages.size(), 3)
+    assertEquals(receivedExceptions.size(), 3)
+    assertEquals(
+      receivedExceptions.asScala.map(_.getMessage).toVector,
+      Vector("boom", "preRestart", "preRestart")
+    )
   }
 
 
