@@ -54,6 +54,8 @@ class SubscriptionsTests extends munit.FunSuite {
     system.unsubscribe(ref, classOf[Int])
     system.unsubscribe(ref, classOf[String]) // not present, but ...
     assert(system.world.get(ref.path).subscriptions.size == 1)
+    system.unsubscribe(ref)
+    assert(system.world.get(ref.path).subscriptions.size == 0)
   }
 
 }
