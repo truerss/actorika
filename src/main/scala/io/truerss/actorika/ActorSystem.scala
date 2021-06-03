@@ -2,9 +2,9 @@ package io.truerss.actorika
 
 import org.slf4j.LoggerFactory
 
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{Executor, Executors, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
-import java.util.{ArrayList => AL}
+import java.util.{UUID, ArrayList => AL}
 import scala.reflect.runtime.universe._
 
 case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
@@ -13,6 +13,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
 
   val address: Address = Address(systemName)
 
+  private val globalCounter = new AtomicLong(0)
   private[actorika] val world: CHM[String, RealActor] = new CHM[String, RealActor]()
 
   private[actorika] var _deadLettersHandler: (Any, ActorRef, ActorRef) => Unit =
@@ -77,6 +78,10 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     spawn(actor, name, systemRef)
   }
 
+  def spawn(actor: Actor): ActorRef = {
+    spawn(actor, s"actor-${globalCounter.getAndIncrement()}", systemRef)
+  }
+
   private[actorika] def spawn(actor: Actor,
                               name: String,
                               parent: ActorRef
@@ -121,10 +126,6 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
       case _ =>
         logger.warn(s"You're trying to stop ${ref.path}-actor, which is not exist in the system")
     }
-  }
-
-  private[actorika] def stop(path: String): Unit = {
-    Option(world.get(path)).foreach { x => stop(x.ref) }
   }
 
   private def stopChildren(actor: Actor): Unit = {
@@ -201,6 +202,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     world.forEach { (_, ra) =>
       stop(ra.ref)
     }
+    scheduler.stop()
     _onTerminationFunction.apply()
     stopSystem = true
   }

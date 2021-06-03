@@ -236,4 +236,23 @@ class ActorTests extends munit.FunSuite {
     }
   }
 
+  test("deadletters to system") {
+    val system = ActorSystem("system")
+    val messages = scala.collection.mutable.ArrayBuffer[Any]()
+    system.registerDeadLetterHandler((msg: Any, _, _) => {
+      messages.addOne(msg)
+    })
+    val ref = system.spawn(new FooActor)
+    val xs = 0 to 3
+    xs.foreach { x => system.send(ref, x)  }
+    // hack
+    system.world.get(ref.path).actor.moveStateTo(ActorStates.Stopped) // mark as stop
+    // then send messages
+    while(ref.hasMessages) {
+      system.world.get(ref.path).tick()
+    }
+    Thread.sleep(100)
+    assertEquals(messages.size, xs.size)
+  }
+
 }

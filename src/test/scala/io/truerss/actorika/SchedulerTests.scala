@@ -1,5 +1,6 @@
 package io.truerss.actorika
 
+import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.duration._
 
 class SchedulerTests extends munit.FunSuite {
@@ -20,6 +21,38 @@ class SchedulerTests extends munit.FunSuite {
     val ref = system.spawn(new TestActor, "actor")
     Thread.sleep(4000)
     assert(onceCalled)
+  }
+
+  test("scheduler.every") {
+    val sch = new Scheduler(ActorSystem.threadFactory("test"))
+    val index = new AtomicInteger(0)
+    val index1 = new AtomicInteger(0)
+    @volatile var flag = false
+    @volatile var end = 0L
+    val start = System.currentTimeMillis()
+    sch.once(3.seconds) { () =>
+      flag = true
+      end = System.currentTimeMillis()
+    }
+    sch.every(1.seconds, 1.second) { () =>
+      index.incrementAndGet()
+      end = System.currentTimeMillis()
+    }
+    sch.every(1.seconds) { () =>
+      index1.incrementAndGet()
+    }
+    Thread.sleep(3500)
+    // check
+    assert(index.get() == 3)
+    assert(index1.get() == 4)
+    assert(ms(start, end) >= 3)
+    assert(flag)
+    assert(ms(start, end) >= 3)
+    sch.stop()
+  }
+
+  private def ms(start: Long, end: Long): Long = {
+    (end - start) / 1000 % 60
   }
 
 }

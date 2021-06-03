@@ -10,16 +10,20 @@ class Scheduler(tf: ThreadFactory) {
   private val executor = Executors.newSingleThreadScheduledExecutor(tf)
   private val logger = LoggerFactory.getLogger(getClass)
 
-  def every(period: FiniteDuration, f: () => Unit): Unit = {
-    every(period, 0, f)
+  def every(period: FiniteDuration)(f: () => Unit): Unit = {
+    every(period, FiniteDuration(0, TimeUnit.MILLISECONDS))(f)
   }
 
-  def every(period: FiniteDuration, delayMs: Long, f: () => Unit): Unit = {
-    executor.scheduleAtFixedRate(run(f), delayMs, period.toMillis, TimeUnit.MILLISECONDS)
+  def every(period: FiniteDuration, delay: FiniteDuration)(f: () => Unit): Unit = {
+    executor.scheduleAtFixedRate(run(f), delay.toMillis, period.toMillis, TimeUnit.MILLISECONDS)
   }
 
   def once(delay: FiniteDuration)(f: () => Unit): Unit = {
     executor.schedule(run(f), delay.toMillis, TimeUnit.MILLISECONDS)
+  }
+
+  private[actorika] def stop(): Unit = {
+    executor.shutdown()
   }
 
   private def run(f: () => Unit): Runnable = {

@@ -124,10 +124,6 @@ trait Actor {
     system.stop(ref)
   }
 
-  private[actorika] def stop(path: String): Unit = {
-    system.stop(path)
-  }
-
   override def toString: String = s"Actor(${me.path}:${_state})"
 
 }
