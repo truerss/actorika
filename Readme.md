@@ -27,8 +27,6 @@ todo:
 // context.become 
 // registerOnTermination
 // scheduler
-// context.children
-// 
 
 ### Event Stream 
 

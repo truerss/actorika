@@ -1,5 +1,7 @@
 package io.truerss.actorika
 
+import jdk.jshell.Snippet.SubKind
+
 import java.util.concurrent.{ConcurrentLinkedQueue => CLQ}
 import scala.collection.mutable.{ArrayBuffer => AB}
 import scala.reflect.runtime.universe._
@@ -118,6 +120,10 @@ private[actorika] case class RealActor(
                       // work with system
                       tryToRestart(Vector(ex), Some(message.message))
 
+                    case ActorStrategies.Skip =>
+                      // no need to handle this message, just skip
+                      isDone = true
+
                     case ActorStrategies.Parent =>
                       throw new IllegalStateException(illegalState)
                   }
@@ -211,7 +217,7 @@ private[actorika] case class RealActor(
               isStopCalled = true
               isDone = true
 
-            case ActorStrategies.Restart =>
+            case ActorStrategies.Restart | ActorStrategies.Skip =>
               onRestartBlock.apply()
               counter = counter + 1
 

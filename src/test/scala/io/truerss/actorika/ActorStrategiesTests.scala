@@ -107,6 +107,22 @@ class ActorStrategiesTests extends munit.FunSuite {
     }
   }
 
+  private class SkipStrategy extends Actor {
+    private var index = -1
+    def receive: Receive = {
+      case _ =>
+        index = index + 1
+        if (index == 1) {
+          throw new Exception("boom")
+        }
+    }
+
+    override def applyRestartStrategy(ex: Throwable, failedMessage: Option[Any], count: Int): ActorStrategies.Value = {
+      receivedExceptions.add(ex)
+      ActorStrategies.Skip
+    }
+  }
+
 
   test("check stop strategy") {
     reset()
@@ -235,6 +251,30 @@ class ActorStrategiesTests extends munit.FunSuite {
       receivedExceptions.asScala.map(_.getMessage).toVector,
       Vector("boom", "preRestart", "preRestart")
     )
+  }
+
+  test("skip strategy check") {
+    reset()
+    val system = ActorSystem("test")
+    val ref = system.spawn(new SkipStrategy(), "actor")
+    system.send(ref, "a") // index => 0
+    system.send(ref, "b") // index => 1
+    system.send(ref, "c") // index => 2
+    system.send(ref, "d") // index => 3
+    assertEquals(ref.associatedMailbox.size(), 4)
+    val ra = system.world.get(ref.path)
+    (0 to 2).foreach { _ => ra.tick() } // 0, 1
+    Thread.sleep(100)
+    assert(ref.associatedMailbox.size() > 0)
+    while(ref.hasMessages) {
+      ra.tick()
+    }
+    Thread.sleep(100)
+    assert(ref.associatedMailbox.isEmpty)
+    assert(receivedExceptions.size() == 1)
+    assert(restartCounter.get == 0)
+    assert(stopCounter.get == 0)
+    assert(startCounter.get == 0)
   }
 
 
