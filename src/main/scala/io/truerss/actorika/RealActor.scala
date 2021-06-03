@@ -105,7 +105,7 @@ private[actorika] case class RealActor(
                   strategy match {
                     case ActorStrategies.Stop =>
                       // change message, the actor will be stopped with the next iteration
-                      receivedMessage = ActorMessage(Kill, originalTo, originalSender)
+                      receivedMessage = ActorTellMessage(Kill, originalTo, originalSender)
                     case ActorStrategies.Restart =>
                       // work with system
                       tryToRestart(Vector(ex), Some(message.message))
@@ -227,6 +227,7 @@ object RealActor {
       if (actor.receive.isDefinedAt(actorMessage.message)) {
         // I do not call user-receive because the function throw exception
         if (callUserFunction) {
+          // todo mark as wait if ask
           actor.receive.apply(actorMessage.message)
         }
       } else {

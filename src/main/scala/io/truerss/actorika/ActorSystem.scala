@@ -41,7 +41,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
   private val systemRef: ActorRef = ActorRef(
     address,
     isSystemRef = true,
-    new CLQ[ActorMessage](new AL[ActorMessage](0))
+    new CLQ[ActorTellMessage](new AL[ActorTellMessage](0))
   )
 
   private[actorika] def resolveStrategy(ref: ActorRef): Vector[StrategyF] = {
@@ -78,7 +78,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
                               parent: ActorRef
                              ): ActorRef = {
     val tmpAddress = allocateAddress(name, parent)
-    val tmpMailbox = new CLQ[ActorMessage]()
+    val tmpMailbox = new CLQ[ActorTellMessage]()
     val ref = ActorRef(tmpAddress, tmpMailbox)
     actor.setMe(ref)
     actor.setSystem(this)

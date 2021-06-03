@@ -20,6 +20,14 @@ system.send(fooRef, "test")
 
 ```
 
+todo:
+// skip - strategy - not restart but just skip messages
+// pipe pattern 
+// logging ?
+// stream
+// context.become 
+// registerOnTermination
+
 ### Event Stream 
 
 ```scala

@@ -1,6 +1,7 @@
 package io.truerss.actorika
 
 import java.util.concurrent.{ConcurrentLinkedQueue => CLQ}
+import scala.concurrent.duration.FiniteDuration
 
 case class ActorRef(
                      address: Address,
@@ -11,12 +12,21 @@ case class ActorRef(
   val path: String = address.name
 
   def send(to: ActorRef, msg: Any): Unit = {
+    val message = ActorTellMessage(msg, to, this)
+    push(to, message)
+  }
+
+  def ask(to: ActorRef, msg: Any)(implicit waitTime: FiniteDuration): Unit = {
+    val message = ActorAskMessage(msg, to, this, waitTime)
+    push(to, message)
+  }
+
+  private def push(to: ActorRef, message: ActorMessage): Unit = {
     if (to.isSystemRef) {
       throw new IllegalArgumentException(
-        s"You're trying to send $msg to the system-mailbox, it's not possible"
+        s"You're trying to send ${message.message} to the system-mailbox, it's not possible"
       )
     } else {
-      val message = ActorMessage(msg, to, this)
       to.associatedMailbox.add(message)
     }
   }
@@ -30,11 +40,11 @@ case class ActorRef(
 }
 
 object ActorRef {
-  def apply(address: Address, associatedMailbox: CLQ[ActorMessage]): ActorRef = {
+  def apply(address: Address, associatedMailbox: CLQ[ActorTellMessage]): ActorRef = {
     new ActorRef(address, isSystemRef = false, associatedMailbox)
   }
 
   def apply(address: Address): ActorRef = {
-    new ActorRef(address, isSystemRef = false, new CLQ[ActorMessage]())
+    new ActorRef(address, isSystemRef = false, new CLQ[ActorTellMessage]())
   }
 }
