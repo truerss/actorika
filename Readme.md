@@ -24,9 +24,11 @@ todo:
 // skip - strategy - not restart but just skip messages
 // pipe pattern 
 // logging ?
-// stream
 // context.become 
 // registerOnTermination
+// scheduler
+// context.children
+// 
 
 ### Event Stream 
 

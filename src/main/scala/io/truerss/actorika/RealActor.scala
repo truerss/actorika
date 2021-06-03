@@ -14,7 +14,7 @@ private[actorika] case class RealActor(
   import RealActor._
   import ActorSystem.{logger, StrategyF}
 
-  private val subscriptions = new CLQ[Type]()
+  private[actorika] val subscriptions = new CLQ[Type]()
 
   @volatile private var inProcess = false
 
@@ -52,6 +52,14 @@ private[actorika] case class RealActor(
 
   def subscribe[T](klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
     subscriptions.add(_tag.tpe)
+  }
+
+  def unsubscribe[T](klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
+    subscriptions.remove(_tag.tpe)
+  }
+
+  def unsubscribe(): Unit = {
+    subscriptions.clear()
   }
 
   def canHandle[T](v: T)(implicit tag: TypeTag[T]): Boolean = {

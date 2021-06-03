@@ -41,7 +41,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
   private val systemRef: ActorRef = ActorRef(
     address,
     isSystemRef = true,
-    new CLQ[ActorTellMessage](new AL[ActorTellMessage](0))
+    new CLQ[ActorMessage](new AL[ActorMessage](0))
   )
 
   private[actorika] def resolveStrategy(ref: ActorRef): Vector[StrategyF] = {
@@ -78,7 +78,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
                               parent: ActorRef
                              ): ActorRef = {
     val tmpAddress = allocateAddress(name, parent)
-    val tmpMailbox = new CLQ[ActorTellMessage]()
+    val tmpMailbox = new CLQ[ActorMessage]()
     val ref = ActorRef(tmpAddress, tmpMailbox)
     actor.setMe(ref)
     actor.setSystem(this)
@@ -108,7 +108,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
         Option(actor.actor._parent).foreach { parent =>
           if (!parent.isSystemRef) {
             Option(world.get(parent.path)).foreach { ch =>
-              ch.actor._children.remove(ref.path)
+              ch.actor._children.remove(ref)
             }
           }
         }
@@ -143,6 +143,18 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
   def subscribe[T](ref: ActorRef, klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
     Option(world.get(ref.path)).foreach { actor =>
       actor.subscribe(klass)
+    }
+  }
+
+  def unsubscribe[T](ref: ActorRef, klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
+    Option(world.get(ref.path)).foreach { actor =>
+      actor.unsubscribe(klass)
+    }
+  }
+
+  def unsubscribe(ref: ActorRef): Unit = {
+    Option(world.get(ref.path)).foreach { actor =>
+      actor.unsubscribe()
     }
   }
 

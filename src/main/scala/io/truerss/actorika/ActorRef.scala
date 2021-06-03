@@ -40,11 +40,11 @@ case class ActorRef(
 }
 
 object ActorRef {
-  def apply(address: Address, associatedMailbox: CLQ[ActorTellMessage]): ActorRef = {
+  def apply(address: Address, associatedMailbox: CLQ[ActorMessage]): ActorRef = {
     new ActorRef(address, isSystemRef = false, associatedMailbox)
   }
 
   def apply(address: Address): ActorRef = {
-    new ActorRef(address, isSystemRef = false, new CLQ[ActorTellMessage]())
+    new ActorRef(address, isSystemRef = false, new CLQ[ActorMessage]())
   }
 }

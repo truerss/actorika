@@ -34,9 +34,9 @@ class ActorRefTests extends munit.FunSuite {
   }
 
   test("create as systemRef") {
-    val ref = ActorRef(Address("system"), new CLQ[ActorTellMessage]())
+    val ref = ActorRef(Address("system"), new CLQ[ActorMessage]())
     assert(!ref.isSystemRef)
-    val sRef= ActorRef(Address("system"), true, new CLQ[ActorTellMessage]())
+    val sRef= ActorRef(Address("system"), true, new CLQ[ActorMessage]())
     assert(sRef.isSystemRef)
   }
 

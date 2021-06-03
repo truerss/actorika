@@ -1,18 +1,25 @@
 package io.truerss.actorika
 
 import java.util.concurrent.{Executor, ConcurrentLinkedQueue => CLQ}
+import scala.jdk.CollectionConverters
 
 trait Actor {
+
+  import CollectionConverters._
 
   final type Receive = PartialFunction[Any, Unit]
 
   @volatile private[actorika] var _state: ActorStates.ActorState =
     ActorStates.Uninitialized
 
-  private[actorika] val _children = new CLQ[String]()
+  private[actorika] val _children = new CLQ[ActorRef]()
 
   protected[actorika] def moveStateTo(newState: ActorStates.ActorState): Unit = {
     _state = newState
+  }
+
+  protected def children: Iterable[ActorRef] = {
+    _children.asScala
   }
 
   private var _me: ActorRef = null
@@ -103,7 +110,7 @@ trait Actor {
 
   def spawn(actor: Actor, name: String): ActorRef = {
     val ref = system.spawn(actor, name, me)
-    _children.add(ref.path)
+    _children.add(ref)
     ref
   }
 
