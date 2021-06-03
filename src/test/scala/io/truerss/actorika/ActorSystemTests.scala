@@ -16,7 +16,9 @@ class ActorSystemTests extends munit.FunSuite {
   }
 
   test("start/stop system") {
+    var stopped = false
     val system = ActorSystem("system")
+    system.registerOnTermination(() => stopped = true)
     val ref = system.spawn(new TestActor, "test")
     system.start()
     Thread.sleep(100)
@@ -28,6 +30,7 @@ class ActorSystemTests extends munit.FunSuite {
     assert(system.stopSystem)
     assert(system.world.isEmpty)
     assert(flag)
+    assert(stopped)
   }
 
 }

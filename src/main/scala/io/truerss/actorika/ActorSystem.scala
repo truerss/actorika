@@ -20,6 +20,8 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
       logger.warn(s"DeadLetter detected: $message, from:$from, to:$to")
     }
 
+  private[actorika] var _onTerminationFunction = { () => }
+
   @volatile private[actorika] var stopSystem = false
 
   private val cores = Runtime.getRuntime.availableProcessors()
@@ -36,6 +38,8 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
   private val runner: Executor = Executors.newSingleThreadExecutor(
     threadFactory(s"$systemName-runner")
   )
+
+  private[actorika] val scheduler: Scheduler = new Scheduler(threadFactory(s"$systemName-scheduler"))
 
   // no messages for processing
   private val systemRef: ActorRef = ActorRef(
@@ -197,7 +201,12 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     world.forEach { (_, ra) =>
       stop(ra.ref)
     }
+    _onTerminationFunction.apply()
     stopSystem = true
+  }
+
+  def registerOnTermination(f : () => Unit): Unit = {
+    _onTerminationFunction = f
   }
 
   private def allocateAddress(name: String,

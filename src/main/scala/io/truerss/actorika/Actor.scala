@@ -22,6 +22,8 @@ trait Actor {
     _children.asScala
   }
 
+  protected def scheduler: Scheduler = system.scheduler
+
   private var _me: ActorRef = null
 
   private var _executor: Executor = null

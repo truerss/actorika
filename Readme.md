@@ -21,11 +21,7 @@ system.send(fooRef, "test")
 ```
 
 todo:
-// skip - strategy - not restart but just skip messages
-// pipe pattern 
-// logging ?
 // context.become 
-// registerOnTermination
 // scheduler
 
 ### Event Stream 
