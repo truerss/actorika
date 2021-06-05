@@ -22,7 +22,22 @@ system.send(fooRef, "test")
 
 todo:
 // context.become 
-// scheduler
+// ask 
+2 options:
+
+ask -> push to the to-mbx
+       state to Waiting
+       tell after ask => push to the top of mbx
+       timer start 
+
+ask -> push to the to-mbx
+       state to Waiting
+       context.become to 
+       message/Timeout timer
+save message id ?       
+
+
+// builder[T <: Actor](params...)
 
 ### Event Stream 
 

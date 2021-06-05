@@ -39,6 +39,10 @@ private[actorika] case class RealActor(
     moveStateTo(ActorStates.Stopped)
   }
 
+  def asWaiting(): Unit = {
+    moveStateTo(ActorStates.Waiting)
+  }
+
   // lock ?
   def stop(): Unit = {
     ref.associatedMailbox.clear()
@@ -162,7 +166,7 @@ private[actorika] case class RealActor(
     )
 
     if (!result.isStopCalled) {
-      // do not clear world
+      // do not clear the world
       stop()
       tryToStart()
     }
@@ -238,11 +242,16 @@ object RealActor {
   implicit class ActorExt(val actor: Actor) extends AnyVal {
     def run(actorMessage: ActorMessage, callUserFunction: Boolean): Unit = {
       actor.setSender(actorMessage.from)
-      if (actor.receive.isDefinedAt(actorMessage.message)) {
-        // I do not call user-receive because the function throw exception
+      val handler = actor.currentHandler
+      if (handler.isDefinedAt(actorMessage.message)) {
+        // I do not call user-receive because the function will throw the exception
         if (callUserFunction) {
-          // todo mark as wait if ask
-          actor.receive.apply(actorMessage.message)
+          actorMessage match {
+            case ActorAskMessage(message, to, from, timeout) =>
+
+            case _ =>
+              handler.apply(actorMessage.message)
+          }
         }
       } else {
         // ignore system messages

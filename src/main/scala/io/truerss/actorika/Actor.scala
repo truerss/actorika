@@ -41,6 +41,8 @@ trait Actor {
     _me = ref
   }
 
+  @volatile private[actorika] var _currentReceive: Receive = receive
+
   protected def me: ActorRef = _me
 
   private var _sender: ActorRef = null
@@ -68,6 +70,13 @@ trait Actor {
   protected def system: ActorSystem = _system
 
   def receive: Receive
+
+  final protected def become(next: Receive): Unit = {
+    _currentReceive = next
+  }
+
+  private[actorika] def currentHandler: Receive = _currentReceive
+
 
   def applyRestartStrategy(ex: Throwable,
                            failedMessage: Option[Any],
