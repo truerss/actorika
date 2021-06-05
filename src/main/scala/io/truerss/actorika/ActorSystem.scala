@@ -3,7 +3,7 @@ package io.truerss.actorika
 import org.slf4j.LoggerFactory
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
-import java.util.concurrent.{Executor, Executors, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
+import java.util.concurrent.{Executor, Executors, ForkJoinPool, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
 import java.util.{ArrayList => AL}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.FiniteDuration
