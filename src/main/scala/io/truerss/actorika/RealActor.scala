@@ -151,7 +151,7 @@ private[actorika] case class RealActor(
         actorMessage match {
           case ActorAskMessage(message, to, from, timeout, promise) =>
             val anon = startAskActor(message, timeout, promise)
-            val ref = system.spawn(anon)
+            val ref = system.spawn(anon, ActorNameGenerator.ask)
             from.send(ref, StartAsk)
             // apply then
             ref.send(to, message)

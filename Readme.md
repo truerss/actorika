@@ -1,6 +1,6 @@
 # actor implementation 
 
-light drop-in replacement of akka
+light drop-in replacement of Akka
 
 ```scala
 import io.truerss.actorika._ 
@@ -19,22 +19,6 @@ system.send(fooRef, "test")
 
 
 ```
-
-todo:
-// ask 
-2 options:
-
-ask -> push to the to-mbx
-       state to Waiting
-       tell after ask => push to the top of mbx
-       timer start 
-
-ask -> push to the to-mbx
-       state to Waiting
-       context.become to 
-       message/Timeout timer
-save message id ?       
-
 
 // builder[T <: Actor](params...)
 
@@ -72,6 +56,15 @@ class MyActor extends Actor {
        
 }
 
+```
+
+### Custom Actor Names:
+
+```scala
+import io.truerss.actorika.ActorNameGenerator
+val generator = ActorNameGenerator("custom")
+
+system.spawn(new MyActor, generator)
 ```
 
 

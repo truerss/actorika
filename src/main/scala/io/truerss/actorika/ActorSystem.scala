@@ -5,7 +5,7 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{Executor, Executors, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
 import java.util.{ArrayList => AL}
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.FiniteDuration
 import scala.reflect.runtime.universe._
 
@@ -39,6 +39,8 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     .getOrElse(createDefaultExecutor)
 
   val executor: Executor = defaultExecutor
+
+  implicit val context = ExecutionContext.fromExecutor(executor)
 
   private val runner: Executor = Executors.newSingleThreadExecutor(
     threadFactory(s"$systemName-runner")
@@ -78,12 +80,16 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     _deadLettersHandler = handler
   }
 
+  def spawn(actor: Actor, generator: ActorNameGenerator): ActorRef = {
+    spawn(actor, generator.next(globalCounter.getAndIncrement()), systemRef)
+  }
+
   def spawn(actor: Actor, name: String): ActorRef = {
     spawn(actor, name, systemRef)
   }
 
   def spawn(actor: Actor): ActorRef = {
-    spawn(actor, s"actor-${globalCounter.getAndIncrement()}", systemRef)
+    spawn(actor, ActorNameGenerator.default.next(globalCounter.getAndIncrement()), systemRef)
   }
 
   private[actorika] def spawn(actor: Actor,
