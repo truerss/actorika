@@ -21,7 +21,6 @@ system.send(fooRef, "test")
 ```
 
 todo:
-// context.become 
 // ask 
 2 options:
 
@@ -55,8 +54,28 @@ system.subscribe(fooRef, classOf[Message])
 system.publish(Message(1))
 ```
 
+### Change Receive function: become
 
-Library has lifecycles and recoverStrategies (Stop, Restart)
+```scala
+
+case object Change
+
+class MyActor extends Actor {
+  def receive: Receive = {
+    case Change =>
+      become(anotherReceive)   
+  }
+
+  def anotherReceive: Receive = {
+    case _ =>     
+  }
+       
+}
+
+```
+
+
+Library has lifecycles and recoverStrategies (Stop, Restart, Parent, Skip)
 
 ### note library does not support of cluster, persistence, streams and so on. 
 

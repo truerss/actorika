@@ -166,7 +166,7 @@ private[actorika] case class RealActor(
     )
 
     if (!result.isStopCalled) {
-      // do not clear the world
+      // I do not clear the world
       stop()
       tryToStart()
     }
@@ -248,6 +248,24 @@ object RealActor {
         if (callUserFunction) {
           actorMessage match {
             case ActorAskMessage(message, to, from, timeout) =>
+              /*
+                val result: Promise[Any] = empty
+                val anon = new Actor {
+                   def receive = {
+                      case Start =>
+                        var sch = system.schedulerAtOnce()
+                      case MessageTimeout =>
+                        result.failed(exception)
+                        ???
+
+                      case msg =>
+                        sch.clear()
+                        stop()
+                        result.set(msg)
+                   }
+                }
+
+               */
 
             case _ =>
               handler.apply(actorMessage.message)

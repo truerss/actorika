@@ -4,7 +4,7 @@ import org.slf4j.LoggerFactory
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{Executor, Executors, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
-import java.util.{UUID, ArrayList => AL}
+import java.util.{ArrayList => AL}
 import scala.reflect.runtime.universe._
 
 case class ActorSystem(systemName: String, settings: ActorSystemSettings) {

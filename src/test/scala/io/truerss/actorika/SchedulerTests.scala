@@ -65,6 +65,21 @@ class SchedulerTests extends munit.FunSuite {
     sch.stop()
   }
 
+  test("scheduler ~ clear") {
+    val sch = new Scheduler(ActorSystem.threadFactory("test"))
+    val index = new AtomicInteger(0)
+    val task = sch.every(100.millis) {() =>
+      val tmp = index.incrementAndGet()
+      if (tmp == 1) {
+        throw new RuntimeException("boom")
+      }
+    }
+    task.clear()
+    Thread.sleep(1000)
+    assert(index.get() == 0)
+    sch.stop()
+  }
+
   private def ms(start: Long, end: Long): Long = {
     (end - start) / 1000 % 60
   }
