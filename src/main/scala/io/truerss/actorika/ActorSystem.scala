@@ -5,6 +5,8 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{Executor, Executors, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
 import java.util.{ArrayList => AL}
+import scala.concurrent.Future
+import scala.concurrent.duration.FiniteDuration
 import scala.reflect.runtime.universe._
 
 case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
@@ -35,6 +37,8 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
 
   private val defaultExecutor: Executor = Option(settings.defaultExecutor)
     .getOrElse(createDefaultExecutor)
+
+  val executor: Executor = defaultExecutor
 
   private val runner: Executor = Executors.newSingleThreadExecutor(
     threadFactory(s"$systemName-runner")
@@ -109,7 +113,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
 
   // @note any exceptions in `stop` will be ignored
   def stop(ref: ActorRef): Unit = {
-    logger.debug(s"Stop ${ref.path}-actor")
+    logger.debug(s"Stop ${ref.path}")
     Option(world.remove(ref.path)) match {
       case Some(actor) =>
         // stop actor + children
@@ -180,6 +184,10 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
 
   def send(to: ActorRef, msg: Any): Unit = {
     systemRef.send(to, msg)
+  }
+
+  def ask(to: ActorRef, msg: Any)(implicit waitTime: FiniteDuration): Future[Any] = {
+    systemRef.ask(to, msg)
   }
 
   // tick-tack event loop

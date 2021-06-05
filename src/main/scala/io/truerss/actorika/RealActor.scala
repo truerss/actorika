@@ -1,9 +1,9 @@
 package io.truerss.actorika
 
-import jdk.jshell.Snippet.SubKind
-
 import java.util.concurrent.{ConcurrentLinkedQueue => CLQ}
 import scala.collection.mutable.{ArrayBuffer => AB}
+import scala.concurrent.Promise
+import scala.concurrent.duration.FiniteDuration
 import scala.reflect.runtime.universe._
 
 // internal
@@ -39,17 +39,13 @@ private[actorika] case class RealActor(
     moveStateTo(ActorStates.Stopped)
   }
 
-  def asWaiting(): Unit = {
-    moveStateTo(ActorStates.Waiting)
-  }
-
-  // lock ?
+  // todo lock ?
   def stop(): Unit = {
     ref.associatedMailbox.clear()
     actor._children.forEach { x => actor.stop(x) }
     asStopped()
     try {
-      actor.actor.postStop()
+      actor.postStop()
     } catch {
       case ex: Throwable =>
         logger.warn(s"Exception in 'postStop'-method in $path-actor", ex)
@@ -104,7 +100,7 @@ private[actorika] case class RealActor(
                 } else {
                   exceptionInUserDefinedFunction
                 }
-                actor.run(receivedMessage, callNow)
+                run(receivedMessage, callNow)
                 exceptionInUserDefinedFunction = false
                 if (receivedMessage.isKill) {
                   system.stop(ref)
@@ -142,6 +138,32 @@ private[actorika] case class RealActor(
         case None =>
           inProcess = false
           return // mailbox is empty
+      }
+    }
+  }
+
+  def run(actorMessage: ActorMessage, callUserFunction: Boolean): Unit = {
+    actor.setSender(actorMessage.from)
+    val handler = actor.currentHandler
+    if (handler.isDefinedAt(actorMessage.message)) {
+      // I do not call user-receive because the function will throw the exception
+      if (callUserFunction) {
+        actorMessage match {
+          case ActorAskMessage(message, to, from, timeout, promise) =>
+            val anon = startAskActor(message, timeout, promise)
+            val ref = system.spawn(anon)
+            from.send(ref, StartAsk)
+            // apply then
+            ref.send(to, message)
+
+          case _ =>
+            handler.apply(actorMessage.message)
+        }
+      }
+    } else {
+      // ignore system messages
+      if (!actorMessage.isKill) {
+        actor.onUnhandled(actorMessage.message)
       }
     }
   }
@@ -239,45 +261,26 @@ private[actorika] case class RealActor(
 object RealActor {
 
   case class RunWhileResult(isStopCalled: Boolean, stack: Vector[Throwable])
-  implicit class ActorExt(val actor: Actor) extends AnyVal {
-    def run(actorMessage: ActorMessage, callUserFunction: Boolean): Unit = {
-      actor.setSender(actorMessage.from)
-      val handler = actor.currentHandler
-      if (handler.isDefinedAt(actorMessage.message)) {
-        // I do not call user-receive because the function will throw the exception
-        if (callUserFunction) {
-          actorMessage match {
-            case ActorAskMessage(message, to, from, timeout) =>
-              /*
-                val result: Promise[Any] = empty
-                val anon = new Actor {
-                   def receive = {
-                      case Start =>
-                        var sch = system.schedulerAtOnce()
-                      case MessageTimeout =>
-                        result.failed(exception)
-                        ???
 
-                      case msg =>
-                        sch.clear()
-                        stop()
-                        result.set(msg)
-                   }
-                }
-
-               */
-
-            case _ =>
-              handler.apply(actorMessage.message)
+  private def startAskActor(message: Any, timeout: FiniteDuration, promise: Promise[Any]): Actor = {
+    new Actor {
+      var sch: SchedulerTask = null
+      override def receive: Receive = {
+        case StartAsk =>
+          sch = system.scheduler.once(timeout) { () =>
+            me.send(me, AskTimeout)
           }
-        }
-      } else {
-        // ignore system messages
-        if (!actorMessage.isKill) {
-          actor.onUnhandled(actorMessage.message)
-        }
+
+        case AskTimeout =>
+          promise.failure(AskException(s"Timeout $timeout is over on $message message"))
+          stop()
+        case msg: Any =>
+          sch.clear()
+          promise.success(msg)
+          stop()
       }
     }
   }
+
 
 }

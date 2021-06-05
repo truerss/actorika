@@ -1,6 +1,7 @@
 package io.truerss.actorika
 
 import java.util.concurrent.{ConcurrentLinkedQueue => CLQ}
+import scala.concurrent.{Future, Promise}
 import scala.concurrent.duration.FiniteDuration
 
 case class ActorRef(
@@ -16,9 +17,11 @@ case class ActorRef(
     push(to, message)
   }
 
-  def ask(to: ActorRef, msg: Any)(implicit waitTime: FiniteDuration): Unit = {
-    val message = ActorAskMessage(msg, to, this, waitTime)
+  def ask(to: ActorRef, msg: Any)(implicit waitTime: FiniteDuration): Future[Any] = {
+    val p = Promise[Any]()
+    val message = ActorAskMessage(msg, to, this, waitTime, p)
     push(to, message)
+    p.future
   }
 
   private def push(to: ActorRef, message: ActorMessage): Unit = {

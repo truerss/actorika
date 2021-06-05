@@ -1,5 +1,6 @@
 package io.truerss.actorika
 
+import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
 
 private[actorika] abstract class ActorMessage(
@@ -18,8 +19,9 @@ private[actorika] case class ActorTellMessage(override val message: Any,
   extends ActorMessage(message, to, from)
 
 private[actorika] case class ActorAskMessage(override val message: Any,
-                                              override val to: ActorRef,
-                                              override val from: ActorRef,
-                                             timeout: FiniteDuration
+                                             override val to: ActorRef,
+                                             override val from: ActorRef,
+                                             timeout: FiniteDuration,
+                                             promiseToResolve: Promise[Any]
                                             )
   extends ActorMessage(message, to, from)
