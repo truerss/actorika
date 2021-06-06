@@ -3,10 +3,11 @@ package io.truerss.actorika
 import org.slf4j.LoggerFactory
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
-import java.util.concurrent.{Executor, Executors, ForkJoinPool, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
+import java.util.concurrent.{Executor, Executors, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
 import java.util.{ArrayList => AL}
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import scala.concurrent.duration.FiniteDuration
+import scala.jdk.CollectionConverters._
 import scala.reflect.runtime.universe._
 
 case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
@@ -27,8 +28,6 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
 
   @volatile private[actorika] var stopSystem = false
 
-  private val cores = Runtime.getRuntime.availableProcessors()
-
   private def createDefaultExecutor: Executor = {
     Executors.newFixedThreadPool(cores,
       threadFactory(s"$systemName-default")
@@ -40,13 +39,14 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
 
   val executor: Executor = defaultExecutor
 
-  implicit val context = ExecutionContext.fromExecutor(executor)
+  implicit val context: ExecutionContextExecutor = ExecutionContext.fromExecutor(executor)
 
   private val runner: Executor = Executors.newSingleThreadExecutor(
     threadFactory(s"$systemName-runner")
   )
 
-  private[actorika] val scheduler: Scheduler = new Scheduler(threadFactory(s"$systemName-scheduler"))
+  private[actorika] val scheduler: Scheduler =
+    new Scheduler(threadFactory(s"$systemName-scheduler"))
 
   // no messages for processing
   private val systemRef: ActorRef = ActorRef(
@@ -55,12 +55,12 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     new CLQ[ActorMessage](new AL[ActorMessage](0))
   )
 
+  private val _defaultStrategy: StrategyF = (ex: Throwable, fm: Option[Any], c: Int) =>
+    ActorStrategies.Stop
+
   private[actorika] def resolveStrategy(ref: ActorRef): Vector[StrategyF] = {
     resolveStrategy(ref, Vector.empty[StrategyF])
   }
-
-  private val _defaultStrategy: StrategyF = (ex: Throwable, fm: Option[Any], c: Int) =>
-    ActorStrategies.Stop
 
   private def resolveStrategy(ref: ActorRef, xs: Vector[StrategyF]): Vector[StrategyF] = {
     Option(world.get(ref.path)) match {
@@ -92,10 +92,10 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     spawn(actor, ActorNameGenerator.default.next(globalCounter.getAndIncrement()), systemRef)
   }
 
-  private[actorika] def spawn(actor: Actor,
+  private[actorika] def allocate(actor: Actor,
                               name: String,
                               parent: ActorRef
-                             ): ActorRef = {
+                             ): RealActor = {
     val tmpAddress = allocateAddress(name, parent)
     val tmpMailbox = new CLQ[ActorMessage]()
     val ref = ActorRef(tmpAddress, tmpMailbox)
@@ -105,42 +105,60 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     if (actor.executor == null) {
       actor.withExecutor(defaultExecutor)
     }
-    val realActor = RealActor(actor, ref, this)
-    Option(world.putIfAbsent(tmpAddress.name, realActor)) match {
-      case Some(prev) if prev == realActor =>
-        ref
+    RealActor(actor, ref, this)
+  }
+
+  private[actorika] def spawn(actor: Actor,
+                              name: String,
+                              parent: ActorRef
+                             ): ActorRef = {
+    val realActor = allocate(actor, name, parent)
+    bind(world, realActor)
+  }
+
+  private[actorika] def resolveParent(ref: ActorRef): Option[RealActor] = {
+    Option(world.get(ref.path)) match {
+      case Some(ra) => // fast check
+        Some(ra)
       case None =>
-        realActor.tryToStart()
-        ref
-      case _ =>
-        throw new IllegalArgumentException(s"Actor#$name already present")
+        // find in actor's hierarchy
+        world.asScala.find { z => resolveParent(z._2, ref).isDefined }.map(_._2)
+    }
+  }
+
+  private def resolveParent(ra: RealActor, ref: ActorRef): Option[RealActor] = {
+    val chs = ra.actor._children
+    if (chs.isEmpty) {
+      None
+    } else {
+      if (chs.contains(ref.path)) {
+        Some(ra)
+      } else {
+        val children = chs.values().asScala.toVector
+        var i = 0
+        while (i < chs.size()) {
+          val tmp = resolveParent(children(i), ref)
+          if (tmp.isDefined) {
+            return tmp
+          }
+          i = i + 1
+        }
+        None
+      }
     }
   }
 
   // @note any exceptions in `stop` will be ignored
+  // todo recursive find in children
   def stop(ref: ActorRef): Unit = {
     logger.debug(s"Stop ${ref.path}")
-    Option(world.remove(ref.path)) match {
-      case Some(actor) =>
-        // stop actor + children
-        // remove from parent
-        Option(actor.actor._parent).foreach { parent =>
-          if (!parent.isSystemRef) {
-            Option(world.get(parent.path)).foreach { ch =>
-              ch.actor._children.remove(ref)
-            }
-          }
-        }
-        stopChildren(actor.actor)
-        actor.stop()
-      case _ =>
-        logger.warn(s"You're trying to stop ${ref.path}-actor, which is not exist in the system")
-    }
-  }
+    Option(world.get(ref.path)) match {
+      case Some(ra) =>
+        ra.stop()
+        world.remove(ref.path)
 
-  private def stopChildren(actor: Actor): Unit = {
-    actor._children.forEach { c =>
-      stop(c)
+      case None =>
+        logger.warn(s"You're trying to stop ${ref.path}-actor, which is not exist in the system")
     }
   }
 
@@ -214,7 +232,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     logger.debug(s"Stop $systemName actor-system")
     // stop all actors
     world.forEach { (_, ra) =>
-      stop(ra.ref)
+      ra.stop()
     }
     scheduler.stop()
     _onTerminationFunction.apply()
@@ -247,6 +265,21 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
 object ActorSystem {
 
   def apply(name: String): ActorSystem = new ActorSystem(name, ActorSystemSettings.default)
+
+  private[actorika] def bind(world: CHM[String, RealActor],
+                             realActor: RealActor): ActorRef = {
+    Option(world.putIfAbsent(realActor.ref.path, realActor)) match {
+      case Some(prev) if prev == realActor =>
+        realActor.ref
+      case None =>
+        realActor.tryToStart()
+        realActor.ref
+      case _ =>
+        throw new IllegalArgumentException(s"Actor#${realActor.ref.path} already present")
+    }
+  }
+
+  private val cores = Runtime.getRuntime.availableProcessors()
 
   private[actorika] val logger = LoggerFactory.getLogger(getClass)
 

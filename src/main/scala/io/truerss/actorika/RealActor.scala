@@ -14,7 +14,7 @@ private[actorika] case class RealActor(
                     ) {
 
   import RealActor._
-  import ActorSystem.{logger, StrategyF}
+  import ActorSystem.logger
 
   private[actorika] val subscriptions = new CLQ[Type]()
 
@@ -39,17 +39,26 @@ private[actorika] case class RealActor(
     moveStateTo(ActorStates.Stopped)
   }
 
-  // todo lock ?
   def stop(): Unit = {
-    ref.associatedMailbox.clear()
-    actor._children.forEach { x => actor.stop(x) }
     asStopped()
+    ref.associatedMailbox.clear()
+    actor._children.forEach { (_, ch) => ch.stop() }
     try {
       actor.postStop()
     } catch {
       case ex: Throwable =>
         logger.warn(s"Exception in 'postStop'-method in $path-actor", ex)
     }
+    system.resolveParent(ref) match {
+      case Some(parent) =>
+        parent.stopMe(ref)
+      case None =>
+        logger.warn(s"Can not detect parent of $ref")
+    }
+  }
+
+  def stopMe(ref: ActorRef): Unit = {
+    actor._children.remove(ref.path)
   }
 
   def subscribe[T](klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
@@ -72,6 +81,8 @@ private[actorika] case class RealActor(
     actor._state match {
       case ActorStates.Live =>
         tick1()
+        // and for children too
+        actor._children.forEach { (_, x) => x.tick() }
       case ActorStates.Uninitialized =>
         // skip
       case ActorStates.Stopped =>

@@ -1,6 +1,6 @@
 package io.truerss.actorika
 
-import java.util.concurrent.{Executor, ConcurrentLinkedQueue => CLQ}
+import java.util.concurrent.{Executor, Executors, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
 import scala.jdk.CollectionConverters
 
 trait Actor {
@@ -12,14 +12,14 @@ trait Actor {
   @volatile private[actorika] var _state: ActorStates.ActorState =
     ActorStates.Uninitialized
 
-  private[actorika] val _children = new CLQ[ActorRef]()
+  private[actorika] val _children: CHM[String, RealActor] = new CHM[String, RealActor]()
 
   protected[actorika] def moveStateTo(newState: ActorStates.ActorState): Unit = {
     _state = newState
   }
 
   protected def children: Iterable[ActorRef] = {
-    _children.asScala
+    _children.asScala.values.map(_.ref)
   }
 
   protected def scheduler: Scheduler = system.scheduler
@@ -120,17 +120,21 @@ trait Actor {
   def onUnhandled(msg: Any): Unit = {}
 
   def spawn(actor: Actor, name: String): ActorRef = {
-    val ref = system.spawn(actor, name, me)
-    _children.add(ref)
-    ref
+    val realActor = system.allocate(actor, name, me)
+    ActorSystem.bind(_children, realActor)
   }
 
   def stop(): Unit = {
-    system.stop(me)
+    // stop every children
+    _children.forEach { (_, ra) =>
+      stop(ra.ref)
+    }
+    // and stop self
+    // todo
   }
 
   def stop(ref: ActorRef): Unit = {
-    system.stop(ref)
+    Option(_children.get(ref.path)).foreach(_.stop())
   }
 
   override def toString: String = s"Actor(${me.path}:${_state})"
