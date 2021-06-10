@@ -21,7 +21,7 @@ class ActorSystemTests extends munit.FunSuite {
     var stopped = false
     val system = ActorSystem("system")
     system.registerOnTermination(() => stopped = true)
-    val ref = system.spawn(new TestActor, "test")
+    system.spawn(new TestActor, "test")
     system.start()
     Thread.sleep(100)
     assertEquals(system.world.size(), 1)

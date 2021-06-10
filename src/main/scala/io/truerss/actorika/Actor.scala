@@ -61,6 +61,9 @@ trait Actor {
 
   protected def parent(): ActorRef = _parent
 
+  def parent1(): ActorRef = _parent
+
+
   private var _system: ActorSystem = null
 
   private[actorika] def setSystem(s: ActorSystem): Unit = {
@@ -120,17 +123,13 @@ trait Actor {
   def onUnhandled(msg: Any): Unit = {}
 
   def spawn(actor: Actor, name: String): ActorRef = {
-    val realActor = system.allocate(actor, name, me)
-    ActorSystem.bind(_children, realActor)
+    system.spawn(actor, name, me)
   }
 
+  // user flow
   def stop(): Unit = {
-    // stop every children
-    _children.forEach { (_, ra) =>
-      stop(ra.ref)
-    }
-    // and stop self
-    // todo
+    system.findMe(me).foreach { ra => ra.stop() }
+    system.findMe(parent()).foreach { ra => ra.stopMe(me) }
   }
 
   def stop(ref: ActorRef): Unit = {
@@ -145,6 +144,13 @@ object Actor {
   implicit class ActorRefExt(val to: ActorRef) extends AnyVal {
     def !(msg: Any)(implicit from: ActorRef): Unit = {
       from.send(to, msg)
+    }
+  }
+
+  // todo add deadletters
+  private[actorika] val empty: Actor = new Actor {
+    override def receive: Receive = {
+      case _ =>
     }
   }
 }

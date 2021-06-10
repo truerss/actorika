@@ -39,6 +39,7 @@ private[actorika] case class RealActor(
     moveStateTo(ActorStates.Stopped)
   }
 
+  // will called from system level
   def stop(): Unit = {
     asStopped()
     ref.associatedMailbox.clear()
@@ -49,16 +50,19 @@ private[actorika] case class RealActor(
       case ex: Throwable =>
         logger.warn(s"Exception in 'postStop'-method in $path-actor", ex)
     }
-    system.resolveParent(ref) match {
-      case Some(parent) =>
-        parent.stopMe(ref)
-      case None =>
-        logger.warn(s"Can not detect parent of $ref")
+    // otherwise nothing to do
+    if (!ref.isSystemRef) {
+      system.findParent(ref) match {
+        case Some(parent) =>
+          Option(parent).foreach(_.stopMe(ref))
+        case None =>
+          logger.warn(s"Can not detect parent of $ref")
+      }
     }
   }
 
-  def stopMe(ref: ActorRef): Unit = {
-    actor._children.remove(ref.path)
+  def stopMe(cref: ActorRef): Unit = {
+    actor._children.remove(cref.path)
   }
 
   def subscribe[T](klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {

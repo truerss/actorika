@@ -44,19 +44,16 @@ class ActorSystemStrategyResolveTests extends munit.FunSuite {
     val system = ActorSystem("system")
     val a1 = system.spawn(new A1(), "a1")
     val b1 = system.spawn(new B1(), "b1")
+    system.start()
     system.send(a1, Spawn)
     system.send(b1, Spawn)
-    while (a1.hasMessages) {
-      system.world.get(a1.path).tick()
-    }
-    while (b1.hasMessages) {
-      system.world.get(b1.path).tick()
-    }
+
     Thread.sleep(100)
     // check
-    assertEquals(system.world.size(), 4)
+    assertEquals(system.world.size(), 2)
     // check strategies
-    val a2 = system.world.asScala.find(x => x._1.contains("a2")).get._2
+    val a2 = system.world.asScala.find(x => x._1.contains(a1.path))
+      .get._2.actor._children.asScala.find(x => x._1.contains("a2")).get._2
     val a2s = system.resolveStrategy(a2.ref)
     assertEquals(a2s.size, 3)
     val ex = new Exception("boom")
@@ -78,6 +75,7 @@ class ActorSystemStrategyResolveTests extends munit.FunSuite {
       ActorStrategies.Restart,
       ActorStrategies.Stop
     ))
+    system.stop()
   }
 
 }

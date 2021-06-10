@@ -120,7 +120,7 @@ class ActorTests extends munit.FunSuite {
       assert(cond = false)
     } catch {
       case ex: Throwable =>
-        assert(ex.getMessage.contains("Actor#actor already present"))
+        assert(ex.getMessage.contains("Actor#test-system/actor already present"))
         assert(cond = true)
     }
     system.spawn(new FooActor, "foo")
