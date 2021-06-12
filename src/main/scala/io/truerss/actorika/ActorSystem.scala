@@ -18,10 +18,8 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
 
   private val globalCounter = new AtomicLong(0)
 
-  private[actorika] var _deadLettersHandler: (Any, ActorRef, ActorRef) => Unit =
-    (message: Any, to: ActorRef, from: ActorRef) => {
-      logger.warn(s"DeadLetter detected: $message, from:$from, to:$to")
-    }
+  private[actorika] var _deadLettersHandler: DeadLettersHandler =
+    new DefaultDeadLettersHandler
 
   private[actorika] var _onTerminationFunction = { () => }
 
@@ -68,6 +66,8 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
   private[actorika] def resolveStrategy(ref: ActorRef): Vector[StrategyF] = {
     resolveStrategy(ref, Vector.empty[StrategyF])
   }
+  // root
+  world.put(systemRef.path, systemActor)
 
   private def resolveStrategy(ref: ActorRef, xs: Vector[StrategyF]): Vector[StrategyF] = {
     Option(world.get(ref.path)) match {
@@ -84,6 +84,15 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
   }
 
   def registerDeadLetterHandler(handler: (Any, ActorRef, ActorRef) => Unit): Unit = {
+    val tmp = new DeadLettersHandler {
+      override def handle(message: Any, from: ActorRef, to: ActorRef): Unit = {
+        handler.apply(message, from, to)
+      }
+    }
+    _deadLettersHandler = tmp
+  }
+
+  def registerDeadLetterHandler(handler: DeadLettersHandler): Unit = {
     _deadLettersHandler = handler
   }
 
@@ -237,7 +246,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     }
     if (!handled) {
       logger.warn(s"Can not publish: $message, there are no actors to handle the message")
-      _deadLettersHandler.apply(message, systemRef, systemRef)
+      _deadLettersHandler.handle(message, systemRef, systemRef)
     }
   }
 

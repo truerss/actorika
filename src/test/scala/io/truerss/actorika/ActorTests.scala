@@ -241,6 +241,7 @@ class ActorTests extends munit.FunSuite {
     val messages = scala.collection.mutable.ArrayBuffer[Any]()
     system.registerDeadLetterHandler((msg: Any, _, _) => {
       messages.addOne(msg)
+      ()
     })
     val ref = system.spawn(new FooActor)
     val xs = 0 to 3

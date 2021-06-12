@@ -91,7 +91,7 @@ private[actorika] case class RealActor(
         // skip
       case ActorStates.Stopped =>
         Option(ref.associatedMailbox.poll()).foreach { am =>
-          system._deadLettersHandler.apply(am.message, am.to, am.from)
+          system._deadLettersHandler.handle(am.message, am.to, am.from)
         }
     }
   }

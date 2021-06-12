@@ -11,7 +11,6 @@ class AskTests extends munit.FunSuite {
   @volatile private var exceptionRaised = ""
   @volatile private var flag = false
 
-
   private class FooActor(barRef: ActorRef) extends Actor {
 
     def receive = {
@@ -36,7 +35,7 @@ class AskTests extends munit.FunSuite {
       ActorStrategies.Skip
     }
 
-    def receive = {
+    def receive: Receive = {
       case x: Int =>
         if (flag) {
           Thread.sleep(1200)
@@ -45,12 +44,19 @@ class AskTests extends munit.FunSuite {
     }
   }
 
-  test("ask") {
+  test("ask".flaky) {
     val system = ActorSystem("system")
+    var msg = ""
+    val handler = new DeadLettersHandler {
+      override def handle(message: Any, to: ActorRef, from: ActorRef): Unit = {
+        msg = s"$message:${to.path}:${from.path}"
+      }
+    }
+    system.registerDeadLetterHandler(handler)
     val bar = system.spawn(new BarActor, "bar")
     val foo = system.spawn(new FooActor(bar), "foo")
-    system.send(foo, 10)
     system.start()
+    system.send(foo, 10)
     Thread.sleep(1000)
     assert(tmp.get() == 10)
 
@@ -59,12 +65,13 @@ class AskTests extends munit.FunSuite {
     Thread.sleep(1000)
     assert(tmp.get() == 10)
     assert(exceptionRaised.isEmpty)
+    Thread.sleep(100)
     flag = true
     system.send(foo, 100)
     Thread.sleep(1500)
     assert(tmp.get() == 10)
     assert(exceptionRaised.contains("Timeout 1 second is over on 100 message"))
-
+    assert(msg == s"1:system/anon-ask-2:system/bar")
     system.stop()
   }
 
