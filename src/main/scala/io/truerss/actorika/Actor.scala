@@ -123,7 +123,9 @@ trait Actor {
   def onUnhandled(msg: Any): Unit = {}
 
   def spawn(actor: Actor, name: String): ActorRef = {
-    system.spawn(actor, name, me)
+    val ra = system.allocate(actor, name, me)
+    _children.put(ra.ref.path, ra)
+    ra.ref
   }
 
   // user flow

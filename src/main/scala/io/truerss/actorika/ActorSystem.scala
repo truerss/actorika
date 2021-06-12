@@ -112,21 +112,33 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     if (actor.executor == null) {
       actor.withExecutor(defaultExecutor)
     }
-    RealActor(
+    val realActor = RealActor(
       actor = actor,
       ref = ref,
       system = this
     )
+    Option(world.putIfAbsent(realActor.ref.path, realActor)) match {
+      case Some(prev) if prev == realActor =>
+        realActor
+      case None =>
+        realActor.tryToStart()
+        realActor
+      case _ =>
+        throw new IllegalArgumentException(s"Actor#${realActor.ref.path} already present")
+    }
   }
 
   private[actorika] def spawn(actor: Actor,
                               name: String,
                               parent: ActorRef
                              ): ActorRef = {
+    // push into world
     val realActor = allocate(actor, name, parent)
-    val ra = bind(systemActor.actor._children, realActor)
-    world.put(ra.ref.path, ra)
-    ra.ref
+    if (parent.isSystemRef) {
+      // ok
+      systemActor.actor._children.put(realActor.ref.path, realActor)
+    }
+    realActor.ref
   }
 
   private[actorika] def findParent(ref: ActorRef): Option[RealActor] = {
