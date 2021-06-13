@@ -40,7 +40,7 @@ private[actorika] case class RealActor(
   }
 
   // will called from system level
-  def stop(): Unit = {
+  def stop(clear: Boolean = false): Unit = {
     asStopped()
     ref.associatedMailbox.clear()
     // I use system.stop because I want to remove from `world` too
@@ -60,8 +60,10 @@ private[actorika] case class RealActor(
           logger.warn(s"Can not detect parent of $ref")
       }
     }
-    // and remove from the system
-    system.rm(ref)
+    if (clear) {
+      // and remove from the system
+      system.rm(ref)
+    }
   }
 
   def stopMe(cref: ActorRef): Unit = {
@@ -204,9 +206,7 @@ private[actorika] case class RealActor(
       },
       onRestartBlock = () => {}
     )
-
     if (!result.isStopCalled) {
-      // I do not clear the world
       stop()
       tryToStart()
     }

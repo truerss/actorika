@@ -70,7 +70,11 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
 //  world.put(systemRef.path, systemActor)
 
   def find(path: String): Option[ActorRef] = {
-    world.values().asScala.find(_.ref.path.contains(path)).map(_.ref)
+    findRealActor(path).map(_.ref)
+  }
+
+  private[actorika] def findRealActor(path: String): Option[RealActor] = {
+    world.values().asScala.find(_.ref.path.contains(path))
   }
 
   private def resolveStrategy(ref: ActorRef, xs: Vector[StrategyF]): Vector[StrategyF] = {
@@ -206,11 +210,17 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
 
   // @note any exceptions in `stop` will be ignored
   def stop(ref: ActorRef): Unit = {
+    stop(ref, clear = true)
+  }
+
+  private[actorika] def stop(ref: ActorRef, clear: Boolean): Unit = {
     logger.debug(s"Stop ${ref.path}")
     findMe(ref) match {
       case Some(ra) =>
-        ra.stop()
-        rm(ref)
+        ra.stop(clear)
+        if (clear) {
+          rm(ref)
+        }
 
       case None =>
         logger.warn(s"You're trying to stop ${ref.path}-actor, which is not exist in the system")
@@ -226,7 +236,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
    * restart is: stop + start + clear mailbox
    * @param ref - actor reference
    */
-  def restart(ref: ActorRef): Unit = {
+  private[actorika] def restart(ref: ActorRef): Unit = {
     logger.debug(s"Restart ${ref.path}-actor")
     findMe(ref).foreach { x =>
       x.tryToRestart(Vector.empty, None)

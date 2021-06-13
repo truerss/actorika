@@ -1,4 +1,6 @@
-package io.truerss.actorika
+package io.truerss.actorika.strategies
+
+import io.truerss.actorika.{Actor, ActorStrategies, ActorSystem}
 
 class ActorSystemStrategyResolveTests extends munit.FunSuite {
 
@@ -52,8 +54,8 @@ class ActorSystemStrategyResolveTests extends munit.FunSuite {
     // check
     assertEquals(system.world.size(), 4)
     // check strategies
-    val a2 = system.world.asScala.find(x => x._1.contains("a2")).get._2
-    val a2s = system.resolveStrategy(a2.ref)
+    val a2 = system.find("a2").get
+    val a2s = system.resolveStrategy(a2)
     assertEquals(a2s.size, 3)
     val ex = new Exception("boom")
     val a2resolved = a2s.map { x => x.apply(ex, None, 0) }
@@ -64,8 +66,8 @@ class ActorSystemStrategyResolveTests extends munit.FunSuite {
       ActorStrategies.Stop
     ))
 
-    val b2 = system.world.asScala.find(x => x._1.contains("b2")).get._2
-    val b2s = system.resolveStrategy(b2.ref)
+    val b2 = system.find("b2").get
+    val b2s = system.resolveStrategy(b2)
     assertEquals(b2s.size, 3)
     val b2resolved = b2s.map { x => x.apply(ex, None, 0) }
 
