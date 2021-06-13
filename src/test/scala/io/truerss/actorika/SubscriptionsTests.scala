@@ -21,7 +21,7 @@ class SubscriptionsTests extends munit.FunSuite {
     }
   }
 
-  test("subscribe to messages") {
+  test("subscribe/unsubscribe to messages") {
     val system = ActorSystem("test-system")
     val ref = system.spawn(new TestActor, "actor")
     val ref1 = system.spawn(new TestActor, "actor1")
@@ -44,6 +44,18 @@ class SubscriptionsTests extends munit.FunSuite {
     assertEquals(ref3.associatedMailbox.size(), 0)
     assertEquals(counter.get(), xs.size*2)
     assertEquals(ref1.associatedMailbox.size(), 0)
+    // unsubscribe
+    system.unsubscribe(ref, classOf[Message])
+    assert(system.world.get(ref.path).subscriptions.isEmpty)
+    assert(!system.world.get(ref3.path).subscriptions.isEmpty)
+    system.subscribe(ref, classOf[Message])
+    system.subscribe(ref, classOf[Int])
+    assert(system.world.get(ref.path).subscriptions.size == 2)
+    system.unsubscribe(ref, classOf[Int])
+    system.unsubscribe(ref, classOf[String]) // not present, but ...
+    assert(system.world.get(ref.path).subscriptions.size == 1)
+    system.unsubscribe(ref)
+    assert(system.world.get(ref.path).subscriptions.size == 0)
   }
 
 }

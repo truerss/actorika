@@ -1,19 +1,28 @@
 package io.truerss.actorika
 
-import java.util.concurrent.{Executor, ConcurrentLinkedQueue => CLQ}
+import java.util.concurrent.{Executor, Executors, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
+import scala.jdk.CollectionConverters
 
 trait Actor {
+
+  import CollectionConverters._
 
   final type Receive = PartialFunction[Any, Unit]
 
   @volatile private[actorika] var _state: ActorStates.ActorState =
     ActorStates.Uninitialized
 
-  private[actorika] val _children = new CLQ[String]()
+  private[actorika] val _children: CHM[String, RealActor] = new CHM[String, RealActor]()
 
   protected[actorika] def moveStateTo(newState: ActorStates.ActorState): Unit = {
     _state = newState
   }
+
+  protected def children: Iterable[ActorRef] = {
+    _children.asScala.values.map(_.ref)
+  }
+
+  protected def scheduler: Scheduler = system.scheduler
 
   private var _me: ActorRef = null
 
@@ -31,6 +40,8 @@ trait Actor {
   private[actorika] def setMe(ref: ActorRef): Unit = {
     _me = ref
   }
+
+  @volatile private[actorika] var _currentReceive: Receive = receive
 
   protected def me: ActorRef = _me
 
@@ -50,6 +61,9 @@ trait Actor {
 
   protected def parent(): ActorRef = _parent
 
+  def parent1(): ActorRef = _parent
+
+
   private var _system: ActorSystem = null
 
   private[actorika] def setSystem(s: ActorSystem): Unit = {
@@ -59,6 +73,13 @@ trait Actor {
   protected def system: ActorSystem = _system
 
   def receive: Receive
+
+  final protected def become(next: Receive): Unit = {
+    _currentReceive = next
+  }
+
+  private[actorika] def currentHandler: Receive = _currentReceive
+
 
   def applyRestartStrategy(ex: Throwable,
                            failedMessage: Option[Any],
@@ -102,21 +123,18 @@ trait Actor {
   def onUnhandled(msg: Any): Unit = {}
 
   def spawn(actor: Actor, name: String): ActorRef = {
-    val ref = system.spawn(actor, name, me)
-    _children.add(ref.path)
-    ref
+    val ra = system.allocate(actor, name, me)
+    _children.put(ra.ref.path, ra)
+    ra.ref
   }
 
+  // user flow
   def stop(): Unit = {
-    system.stop(me)
+    system.findMe(me).foreach { ra => ra.stop() }
   }
 
   def stop(ref: ActorRef): Unit = {
-    system.stop(ref)
-  }
-
-  private[actorika] def stop(path: String): Unit = {
-    system.stop(path)
+    Option(_children.get(ref.path)).foreach(_.stop())
   }
 
   override def toString: String = s"Actor(${me.path}:${_state})"
@@ -124,9 +142,10 @@ trait Actor {
 }
 
 object Actor {
-  implicit class ActorRefExt(val to: ActorRef) extends AnyVal {
-    def !(msg: Any)(implicit from: ActorRef): Unit = {
-      from.send(to, msg)
+  private[actorika] val empty: Actor = new Actor {
+    override def receive: Receive = {
+      case message =>
+        system._deadLettersHandler.handle(message, me, sender)
     }
   }
 }

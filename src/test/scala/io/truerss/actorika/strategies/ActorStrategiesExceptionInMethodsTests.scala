@@ -1,74 +1,11 @@
-package io.truerss.actorika
+package io.truerss.actorika.strategies
 
-import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.atomic.AtomicInteger
+import io.truerss.actorika._
 
-class ActorStrategiesTests extends munit.FunSuite {
+class ActorStrategiesExceptionInMethodsTests extends CommonTest {
 
-  import scala.jdk.CollectionConverters._
   import ActorStates._
-
-  private val stopCounter = new AtomicInteger(0)
-  private val startCounter = new AtomicInteger(0)
-  private val restartCounter = new AtomicInteger(0)
-
-  private val receivedExceptions = new ConcurrentLinkedQueue[Throwable]()
-  private val receivedMessages = new ConcurrentLinkedQueue[Any]()
-
-  private val states = new ConcurrentLinkedQueue[ActorStates.ActorState]()
-
-  private def reset(): Unit = {
-    stopCounter.set(0)
-    startCounter.set(0)
-    restartCounter.set(0)
-    receivedExceptions.clear()
-    receivedMessages.clear()
-    states.clear()
-  }
-
-  private trait CommonLT extends Actor {
-    override protected[actorika] def moveStateTo(newState: ActorState): Unit = {
-      states.add(newState)
-      super.moveStateTo(newState)
-    }
-    override def preStart(): Unit = startCounter.incrementAndGet()
-
-    override def postStop(): Unit = stopCounter.incrementAndGet()
-
-    override def preRestart(): Unit = restartCounter.incrementAndGet()
-  }
-
-  private trait Empty { self: Actor =>
-    override def receive: Receive = {
-      case _ =>
-    }
-  }
-
-  private trait RestartStrategyImpl { self: Actor =>
-    override def applyRestartStrategy(ex: Throwable, failedMessage: Option[Any], count: Int): ActorStrategies.Value = {
-      receivedExceptions.add(ex)
-      failedMessage.foreach { x => receivedMessages.add(x) }
-      if (count == 3) {
-        ActorStrategies.Stop
-      } else {
-        ActorStrategies.Restart
-      }
-    }
-  }
-
-  private class StopStrategy extends CommonLT {
-    override def receive: Receive = {
-      case _ =>
-        throw new Exception("boom")
-    }
-  }
-
-  private class RestartStrategy extends CommonLT with RestartStrategyImpl {
-    override def receive: Receive = {
-      case _ =>
-        throw new Exception("boom")
-    }
-  }
+  import scala.jdk.CollectionConverters._
 
   private class ExceptionInPreStartAndStopStrategy extends CommonLT with Empty {
     override def preStart(): Unit = {
@@ -107,55 +44,6 @@ class ActorStrategiesTests extends munit.FunSuite {
     }
   }
 
-
-  test("check stop strategy") {
-    reset()
-    val system = ActorSystem("system")
-    val ref = system.spawn(new StopStrategy, "test")
-    system.send(ref, "boom")
-    while (ref.hasMessages) {
-      system.world.forEach((_, x) => x.tick())
-    }
-    Thread.sleep(100)
-    assertEquals(system.world.size(), 0)
-    assertEquals(stopCounter.get(), 1)
-    assertEquals(startCounter.get(), 1)
-    assertEquals(restartCounter.get(), 0)
-    assertEquals(states.asScala.toVector, Vector(Uninitialized, Live, Stopped))
-  }
-
-  test("restart strategy") {
-    reset()
-    val system = ActorSystem("system")
-    val ref = system.spawn(new RestartStrategy, "test")
-
-    def again(): Unit = {
-      system.send(ref, "boom")
-      while (ref.hasMessages) {
-        system.world.forEach((_, x) => x.tick())
-      }
-      Thread.sleep(100)
-    }
-    again()
-    assertEquals(system.world.size(), 1)
-    assertEquals(stopCounter.get(), 1)
-    assertEquals(startCounter.get(), 2)
-    assertEquals(restartCounter.get(), 1)
-    assertEquals(
-      states.asScala.toVector,
-      Vector(
-        Uninitialized, Live, // started
-        Uninitialized, Stopped, // message passed
-        Uninitialized, Live // restarted
-      )
-    )
-    again()
-    assertEquals(stopCounter.get(), 2)
-    assertEquals(restartCounter.get(), 2)
-    assertEquals(startCounter.get(), 3)
-    assertEquals(receivedMessages.size(), 2)
-    assertEquals(receivedExceptions.size(), 2)
-  }
 
   test("exception in preStart#Stop") {
     reset()

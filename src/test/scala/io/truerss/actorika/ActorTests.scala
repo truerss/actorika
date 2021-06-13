@@ -48,7 +48,7 @@ class ActorTests extends munit.FunSuite {
       case Allocate =>
         _childRef = spawn(new FooActor, "foo")
       case CheckParent =>
-        import Actor._
+        import ActorDsl._
         _childRef ! CheckParent
       case StopChild =>
         stop(_childRef)
@@ -64,7 +64,7 @@ class ActorTests extends munit.FunSuite {
   }
 
   private class FooActor extends Actor {
-    import Actor._
+    import ActorDsl._
     override def receive: Receive = {
       case CheckParent =>
         sender ! parent()
@@ -104,6 +104,7 @@ class ActorTests extends munit.FunSuite {
     assertEquals(ref.associatedMailbox.size(), 0)
     // and stop
     system.stop(ref)
+    Thread.sleep(100)
     assertEquals(ref.associatedMailbox.size(), 0)
     assertEquals(system.world.size(), 0)
     assertEquals(preStartCalled.get(), 2)
@@ -120,7 +121,7 @@ class ActorTests extends munit.FunSuite {
       assert(cond = false)
     } catch {
       case ex: Throwable =>
-        assert(ex.getMessage.contains("Actor#actor already present"))
+        assert(ex.getMessage.contains("Actor#test-system/actor already present"))
         assert(cond = true)
     }
     system.spawn(new FooActor, "foo")
@@ -234,6 +235,26 @@ class ActorTests extends munit.FunSuite {
       case ex: IllegalArgumentException =>
         assert(ex.getMessage.contains("You're trying to send"))
     }
+  }
+
+  test("deadletters to system") {
+    val system = ActorSystem("system")
+    val messages = scala.collection.mutable.ArrayBuffer[Any]()
+    system.registerDeadLetterHandler((msg: Any, _, _) => {
+      messages.addOne(msg)
+      ()
+    })
+    val ref = system.spawn(new FooActor)
+    val xs = 0 to 3
+    xs.foreach { x => system.send(ref, x)  }
+    // hack
+    system.world.get(ref.path).actor.moveStateTo(ActorStates.Stopped) // mark as stop
+    // then send messages
+    while(ref.hasMessages) {
+      system.world.get(ref.path).tick()
+    }
+    Thread.sleep(100)
+    assertEquals(messages.size, xs.size)
   }
 
 }

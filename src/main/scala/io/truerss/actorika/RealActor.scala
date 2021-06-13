@@ -2,6 +2,8 @@ package io.truerss.actorika
 
 import java.util.concurrent.{ConcurrentLinkedQueue => CLQ}
 import scala.collection.mutable.{ArrayBuffer => AB}
+import scala.concurrent.Promise
+import scala.concurrent.duration.FiniteDuration
 import scala.reflect.runtime.universe._
 
 // internal
@@ -12,9 +14,9 @@ private[actorika] case class RealActor(
                     ) {
 
   import RealActor._
-  import ActorSystem.{logger, StrategyF}
+  import ActorSystem.logger
 
-  private val subscriptions = new CLQ[Type]()
+  private[actorika] val subscriptions = new CLQ[Type]()
 
   @volatile private var inProcess = false
 
@@ -37,21 +39,47 @@ private[actorika] case class RealActor(
     moveStateTo(ActorStates.Stopped)
   }
 
-  // lock ?
-  def stop(): Unit = {
-    ref.associatedMailbox.clear()
-    actor._children.forEach { x => actor.stop(x) }
+  // will called from system level
+  def stop(clear: Boolean = true): Unit = {
     asStopped()
+    ref.associatedMailbox.clear()
+    // I use system.stop because I want to remove from `world` too
+    actor._children.forEach { (_, ch) => system.stop(ch.ref) }
     try {
-      actor.actor.postStop()
+      actor.postStop()
     } catch {
       case ex: Throwable =>
         logger.warn(s"Exception in 'postStop'-method in $path-actor", ex)
     }
+    // otherwise nothing to do
+    if (!ref.isSystemRef) {
+      system.findParent(ref) match {
+        case Some(parent) =>
+          Option(parent).foreach(_.stopMe(ref))
+        case None =>
+          logger.warn(s"Can not detect parent of $ref")
+      }
+    }
+    if (clear) {
+      // and remove from the system
+      system.rm(ref)
+    }
+  }
+
+  def stopMe(cref: ActorRef): Unit = {
+    actor._children.remove(cref.path)
   }
 
   def subscribe[T](klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
     subscriptions.add(_tag.tpe)
+  }
+
+  def unsubscribe[T](klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
+    subscriptions.remove(_tag.tpe)
+  }
+
+  def unsubscribe(): Unit = {
+    subscriptions.clear()
   }
 
   def canHandle[T](v: T)(implicit tag: TypeTag[T]): Boolean = {
@@ -62,11 +90,13 @@ private[actorika] case class RealActor(
     actor._state match {
       case ActorStates.Live =>
         tick1()
+        // and for children too
+        actor._children.forEach { (_, x) => x.tick() }
       case ActorStates.Uninitialized =>
         // skip
       case ActorStates.Stopped =>
         Option(ref.associatedMailbox.poll()).foreach { am =>
-          system._deadLettersHandler.apply(am.message, am.to, am.from)
+          system._deadLettersHandler.handle(am.message, am.to, am.from)
         }
     }
   }
@@ -90,7 +120,7 @@ private[actorika] case class RealActor(
                 } else {
                   exceptionInUserDefinedFunction
                 }
-                actor.run(receivedMessage, callNow)
+                run(receivedMessage, callNow)
                 exceptionInUserDefinedFunction = false
                 if (receivedMessage.isKill) {
                   system.stop(ref)
@@ -105,10 +135,14 @@ private[actorika] case class RealActor(
                   strategy match {
                     case ActorStrategies.Stop =>
                       // change message, the actor will be stopped with the next iteration
-                      receivedMessage = ActorMessage(Kill, originalTo, originalSender)
+                      receivedMessage = ActorTellMessage(Kill, originalTo, originalSender)
                     case ActorStrategies.Restart =>
                       // work with system
                       tryToRestart(Vector(ex), Some(message.message))
+
+                    case ActorStrategies.Skip =>
+                      // no need to handle this message, just skip
+                      isDone = true
 
                     case ActorStrategies.Parent =>
                       throw new IllegalStateException(illegalState)
@@ -128,6 +162,32 @@ private[actorika] case class RealActor(
     }
   }
 
+  def run(actorMessage: ActorMessage, callUserFunction: Boolean): Unit = {
+    actor.setSender(actorMessage.from)
+    val handler = actor.currentHandler
+    if (handler.isDefinedAt(actorMessage.message)) {
+      // I do not call user-receive because the function will throw the exception
+      if (callUserFunction) {
+        actorMessage match {
+          case ActorAskMessage(message, to, from, timeout, promise) =>
+            val anon = startAskActor(message, timeout, promise)
+            val ref = system.spawn(anon, ActorNameGenerator.ask)
+            from.send(ref, StartAsk)
+            // apply then
+            ref.send(to, message)
+
+          case _ =>
+            handler.apply(actorMessage.message)
+        }
+      }
+    } else {
+      // ignore system messages
+      if (!actorMessage.isKill) {
+        actor.onUnhandled(actorMessage.message)
+      }
+    }
+  }
+
   private def illegalState: String = {
     s"Failed to resolve correct strategy: $ref"
   }
@@ -142,14 +202,12 @@ private[actorika] case class RealActor(
         actor.preRestart()
       },
       onStopBlock = () => {
-        system.stop(ref)
+        system.stop(ref, clear = false)
       },
       onRestartBlock = () => {}
     )
-
     if (!result.isStopCalled) {
-      // do not clear world
-      stop()
+      stop(clear = false)
       tryToStart()
     }
   }
@@ -203,7 +261,7 @@ private[actorika] case class RealActor(
               isStopCalled = true
               isDone = true
 
-            case ActorStrategies.Restart =>
+            case ActorStrategies.Restart | ActorStrategies.Skip =>
               onRestartBlock.apply()
               counter = counter + 1
 
@@ -221,21 +279,26 @@ private[actorika] case class RealActor(
 object RealActor {
 
   case class RunWhileResult(isStopCalled: Boolean, stack: Vector[Throwable])
-  implicit class ActorExt(val actor: Actor) extends AnyVal {
-    def run(actorMessage: ActorMessage, callUserFunction: Boolean): Unit = {
-      actor.setSender(actorMessage.from)
-      if (actor.receive.isDefinedAt(actorMessage.message)) {
-        // I do not call user-receive because the function throw exception
-        if (callUserFunction) {
-          actor.receive.apply(actorMessage.message)
-        }
-      } else {
-        // ignore system messages
-        if (!actorMessage.isKill) {
-          actor.onUnhandled(actorMessage.message)
-        }
+
+  private def startAskActor(message: Any, timeout: FiniteDuration, promise: Promise[Any]): Actor = {
+    new Actor {
+      var sch: SchedulerTask = null
+      override def receive: Receive = {
+        case StartAsk =>
+          sch = system.scheduler.once(timeout) { () =>
+            me.send(me, AskTimeout)
+          }
+
+        case AskTimeout =>
+          promise.failure(AskException(s"Timeout $timeout is over on $message message"))
+          stop()
+        case msg: Any =>
+          sch.clear()
+          promise.success(msg)
+          stop()
       }
     }
   }
+
 
 }
