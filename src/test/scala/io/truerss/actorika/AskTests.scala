@@ -1,6 +1,6 @@
 package io.truerss.actorika
 
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
@@ -8,13 +8,12 @@ import scala.util.{Failure, Success}
 class AskTests extends munit.FunSuite {
 
   private val tmp = new AtomicInteger(0)
-  @volatile private var exceptionRaised = ""
+  private val exceptionRaised = new AtomicReference[String]("")
   @volatile private var flag = false
-
 
   private class FooActor(barRef: ActorRef) extends Actor {
 
-    def receive = {
+    def receive: Receive = {
       case x: Int =>
         implicit val ec = ExecutionContext.fromExecutor(executor)
         val result = me.ask(barRef, x)(1.second)
@@ -23,7 +22,7 @@ class AskTests extends munit.FunSuite {
             tmp.set(value.asInstanceOf[Int])
 
           case Failure(AskException(message)) =>
-            exceptionRaised = message
+            exceptionRaised.set(message)
           case Failure(_) =>
             println("interesting...")
         }
@@ -36,7 +35,7 @@ class AskTests extends munit.FunSuite {
       ActorStrategies.Skip
     }
 
-    def receive = {
+    def receive: Receive = {
       case x: Int =>
         if (flag) {
           Thread.sleep(1200)
@@ -49,8 +48,8 @@ class AskTests extends munit.FunSuite {
     val system = ActorSystem("system")
     val bar = system.spawn(new BarActor, "bar")
     val foo = system.spawn(new FooActor(bar), "foo")
-    system.send(foo, 10)
     system.start()
+    system.send(foo, 10)
     Thread.sleep(1000)
     assert(tmp.get() == 10)
 
@@ -58,13 +57,12 @@ class AskTests extends munit.FunSuite {
     system.send(foo, 0)
     Thread.sleep(1000)
     assert(tmp.get() == 10)
-    assert(exceptionRaised.isEmpty)
+    Thread.sleep(100)
     flag = true
     system.send(foo, 100)
     Thread.sleep(1500)
     assert(tmp.get() == 10)
-    assert(exceptionRaised.contains("Timeout 1 second is over on 100 message"))
-
+    assert(exceptionRaised.get().contains("Timeout 1 second is over on 100 message"))
     system.stop()
   }
 

@@ -14,7 +14,7 @@ private[actorika] case class RealActor(
                     ) {
 
   import RealActor._
-  import ActorSystem.{logger, StrategyF}
+  import ActorSystem.logger
 
   private[actorika] val subscriptions = new CLQ[Type]()
 
@@ -39,17 +39,35 @@ private[actorika] case class RealActor(
     moveStateTo(ActorStates.Stopped)
   }
 
-  // todo lock ?
-  def stop(): Unit = {
-    ref.associatedMailbox.clear()
-    actor._children.forEach { x => actor.stop(x) }
+  // will called from system level
+  def stop(clear: Boolean = true): Unit = {
     asStopped()
+    ref.associatedMailbox.clear()
+    // I use system.stop because I want to remove from `world` too
+    actor._children.forEach { (_, ch) => system.stop(ch.ref) }
     try {
       actor.postStop()
     } catch {
       case ex: Throwable =>
         logger.warn(s"Exception in 'postStop'-method in $path-actor", ex)
     }
+    // otherwise nothing to do
+    if (!ref.isSystemRef) {
+      system.findParent(ref) match {
+        case Some(parent) =>
+          Option(parent).foreach(_.stopMe(ref))
+        case None =>
+          logger.warn(s"Can not detect parent of $ref")
+      }
+    }
+    if (clear) {
+      // and remove from the system
+      system.rm(ref)
+    }
+  }
+
+  def stopMe(cref: ActorRef): Unit = {
+    actor._children.remove(cref.path)
   }
 
   def subscribe[T](klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
@@ -72,11 +90,13 @@ private[actorika] case class RealActor(
     actor._state match {
       case ActorStates.Live =>
         tick1()
+        // and for children too
+        actor._children.forEach { (_, x) => x.tick() }
       case ActorStates.Uninitialized =>
         // skip
       case ActorStates.Stopped =>
         Option(ref.associatedMailbox.poll()).foreach { am =>
-          system._deadLettersHandler.apply(am.message, am.to, am.from)
+          system._deadLettersHandler.handle(am.message, am.to, am.from)
         }
     }
   }
@@ -182,14 +202,12 @@ private[actorika] case class RealActor(
         actor.preRestart()
       },
       onStopBlock = () => {
-        system.stop(ref)
+        system.stop(ref, clear = false)
       },
       onRestartBlock = () => {}
     )
-
     if (!result.isStopCalled) {
-      // I do not clear the world
-      stop()
+      stop(clear = false)
       tryToStart()
     }
   }

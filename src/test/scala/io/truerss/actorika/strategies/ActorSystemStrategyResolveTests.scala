@@ -1,4 +1,6 @@
-package io.truerss.actorika
+package io.truerss.actorika.strategies
+
+import io.truerss.actorika.{Actor, ActorStrategies, ActorSystem}
 
 class ActorSystemStrategyResolveTests extends munit.FunSuite {
 
@@ -44,20 +46,16 @@ class ActorSystemStrategyResolveTests extends munit.FunSuite {
     val system = ActorSystem("system")
     val a1 = system.spawn(new A1(), "a1")
     val b1 = system.spawn(new B1(), "b1")
+    system.start()
     system.send(a1, Spawn)
     system.send(b1, Spawn)
-    while (a1.hasMessages) {
-      system.world.get(a1.path).tick()
-    }
-    while (b1.hasMessages) {
-      system.world.get(b1.path).tick()
-    }
+
     Thread.sleep(100)
     // check
     assertEquals(system.world.size(), 4)
     // check strategies
-    val a2 = system.world.asScala.find(x => x._1.contains("a2")).get._2
-    val a2s = system.resolveStrategy(a2.ref)
+    val a2 = system.find("a2").get
+    val a2s = system.resolveStrategy(a2)
     assertEquals(a2s.size, 3)
     val ex = new Exception("boom")
     val a2resolved = a2s.map { x => x.apply(ex, None, 0) }
@@ -68,8 +66,8 @@ class ActorSystemStrategyResolveTests extends munit.FunSuite {
       ActorStrategies.Stop
     ))
 
-    val b2 = system.world.asScala.find(x => x._1.contains("b2")).get._2
-    val b2s = system.resolveStrategy(b2.ref)
+    val b2 = system.find("b2").get
+    val b2s = system.resolveStrategy(b2)
     assertEquals(b2s.size, 3)
     val b2resolved = b2s.map { x => x.apply(ex, None, 0) }
 
@@ -78,6 +76,7 @@ class ActorSystemStrategyResolveTests extends munit.FunSuite {
       ActorStrategies.Restart,
       ActorStrategies.Stop
     ))
+    system.stop()
   }
 
 }

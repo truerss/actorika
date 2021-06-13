@@ -1,6 +1,6 @@
 package io.truerss.actorika
 
-import java.util.concurrent.{Executor, ConcurrentLinkedQueue => CLQ}
+import java.util.concurrent.{Executor, Executors, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
 import scala.jdk.CollectionConverters
 
 trait Actor {
@@ -12,14 +12,14 @@ trait Actor {
   @volatile private[actorika] var _state: ActorStates.ActorState =
     ActorStates.Uninitialized
 
-  private[actorika] val _children = new CLQ[ActorRef]()
+  private[actorika] val _children: CHM[String, RealActor] = new CHM[String, RealActor]()
 
   protected[actorika] def moveStateTo(newState: ActorStates.ActorState): Unit = {
     _state = newState
   }
 
   protected def children: Iterable[ActorRef] = {
-    _children.asScala
+    _children.asScala.values.map(_.ref)
   }
 
   protected def scheduler: Scheduler = system.scheduler
@@ -60,6 +60,9 @@ trait Actor {
   }
 
   protected def parent(): ActorRef = _parent
+
+  def parent1(): ActorRef = _parent
+
 
   private var _system: ActorSystem = null
 
@@ -120,17 +123,18 @@ trait Actor {
   def onUnhandled(msg: Any): Unit = {}
 
   def spawn(actor: Actor, name: String): ActorRef = {
-    val ref = system.spawn(actor, name, me)
-    _children.add(ref)
-    ref
+    val ra = system.allocate(actor, name, me)
+    _children.put(ra.ref.path, ra)
+    ra.ref
   }
 
+  // user flow
   def stop(): Unit = {
-    system.stop(me)
+    system.findMe(me).foreach { ra => ra.stop() }
   }
 
   def stop(ref: ActorRef): Unit = {
-    system.stop(ref)
+    Option(_children.get(ref.path)).foreach(_.stop())
   }
 
   override def toString: String = s"Actor(${me.path}:${_state})"
@@ -138,9 +142,10 @@ trait Actor {
 }
 
 object Actor {
-  implicit class ActorRefExt(val to: ActorRef) extends AnyVal {
-    def !(msg: Any)(implicit from: ActorRef): Unit = {
-      from.send(to, msg)
+  private[actorika] val empty: Actor = new Actor {
+    override def receive: Receive = {
+      case message =>
+        system._deadLettersHandler.handle(message, me, sender)
     }
   }
 }
