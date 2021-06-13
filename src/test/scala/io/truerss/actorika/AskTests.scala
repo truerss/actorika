@@ -12,7 +12,6 @@ class AskTests extends munit.FunSuite {
   @volatile private var flag = false
 
   private class FooActor(barRef: ActorRef) extends Actor {
-
     def receive: Receive = {
       case x: Int =>
         implicit val ec = ExecutionContext.fromExecutor(executor)

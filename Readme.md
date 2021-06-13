@@ -29,8 +29,8 @@ import io.truerss.actorika._
 
 case class Message(id: Int)
 
-val system = ActorSystem("test")
 val fooRef = system.spawn(new FooActor, "foo")
+val system = ActorSystem("test")
 
 system.subscribe(fooRef, classOf[Message])
 
@@ -67,8 +67,45 @@ val generator = ActorNameGenerator("custom")
 system.spawn(new MyActor, generator)
 ```
 
+### Scheduler
 
-Library has lifecycles and recoverStrategies (Stop, Restart, Parent, Skip)
+```scala
+class MyActor extends Actor {
+  override def preStart(): Unit = {
+    scheduler.once(1.second){ () =>
+      println("once")
+    }
+    scheduler.every(1.second) { () =>
+      println("every")
+    }
+  }
+}  
+```
+
+### Lifecycle
+
+```scala
+class MyActor extends Actor {
+  
+  override def preStart(): Unit = { }
+  override def postStop(): Unit = { }
+  override def preRestart(): Unit = { }
+  
+  def receive: Receive = {
+    case _ =>
+  }
+}
+
+```
+
+### Strategies Description
+
+```
+Parent -> will apply Parent strategy (by default)
+Stop   -> actor will be stopped
+Skip   -> message will be skipped
+Restart -> preRestart(), clear mailbox, stop Actor, call postStop, then start Actor again (preStart)   
+```
 
 ### note library does not support of cluster, persistence, streams and so on. 
 

@@ -8,18 +8,22 @@ class SchedulerTests extends munit.FunSuite {
   @volatile private var onceCalled = false
 
   private class TestActor extends Actor {
-    scheduler.once(3.seconds){ () =>
-      onceCalled = true
+
+    override def preStart(): Unit = {
+      scheduler.once(1.seconds) { () =>
+        onceCalled = true
+      }
     }
+
     def receive = {
       case _ =>
     }
   }
 
-  test("scheduler".ignore) {
+  test("scheduler") {
     val system = ActorSystem("test")
     val ref = system.spawn(new TestActor, "actor")
-    Thread.sleep(4000)
+    Thread.sleep(1500)
     assert(onceCalled)
   }
 

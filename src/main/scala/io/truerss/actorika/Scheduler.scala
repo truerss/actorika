@@ -7,7 +7,7 @@ import scala.concurrent.duration.FiniteDuration
 
 class SchedulerTask(f: () => Unit) {
   @volatile private var cleared = false
-  def clear() = {
+  def clear(): Unit = {
     cleared = true
   }
 
