@@ -176,7 +176,6 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
   private[actorika] def findMe(ref: ActorRef): Option[RealActor] = {
     Option(world.get(ref.path)) match {
       case Some(ra) => // fast check
-        // todo pass ActorSystem !!!
         Some(ra)
       case None =>
         // find in actor's hierarchy
@@ -184,7 +183,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
           .map { x =>
             findMe(x, ref)
           }.collectFirst {
-          case Some(r) => r
+            case Some(r) => r
         }
     }
   }

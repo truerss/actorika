@@ -13,7 +13,7 @@ class AskTests extends munit.FunSuite {
 
   private class FooActor(barRef: ActorRef) extends Actor {
 
-    def receive = {
+    def receive: Receive = {
       case x: Int =>
         implicit val ec = ExecutionContext.fromExecutor(executor)
         val result = me.ask(barRef, x)(1.second)
@@ -22,7 +22,6 @@ class AskTests extends munit.FunSuite {
             tmp.set(value.asInstanceOf[Int])
 
           case Failure(AskException(message)) =>
-            println(s"-------------> ${message}")
             exceptionRaised.set(message)
           case Failure(_) =>
             println("interesting...")
@@ -47,13 +46,6 @@ class AskTests extends munit.FunSuite {
 
   test("ask") {
     val system = ActorSystem("system")
-    @volatile var msg = ""
-    val handler = new DeadLettersHandler {
-      override def handle(message: Any, to: ActorRef, from: ActorRef): Unit = {
-        msg = s"$message:${to.path}:${from.path}"
-      }
-    }
-    system.registerDeadLetterHandler(handler)
     val bar = system.spawn(new BarActor, "bar")
     val foo = system.spawn(new FooActor(bar), "foo")
     system.start()
@@ -71,8 +63,6 @@ class AskTests extends munit.FunSuite {
     Thread.sleep(1500)
     assert(tmp.get() == 10)
     assert(exceptionRaised.get().contains("Timeout 1 second is over on 100 message"))
-    println(s"-----------> ${msg}")
-    //TODO assert(msg == s"1:system/anon-ask-2:system/bar")
     system.stop()
   }
 

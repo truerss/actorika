@@ -142,10 +142,10 @@ trait Actor {
 }
 
 object Actor {
-  // todo add deadletters
   private[actorika] val empty: Actor = new Actor {
     override def receive: Receive = {
-      case _ =>
+      case message =>
+        system._deadLettersHandler.handle(message, me, sender)
     }
   }
 }
