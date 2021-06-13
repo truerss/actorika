@@ -16,7 +16,7 @@ class ActorHierarchyTests extends munit.FunSuite {
   private case object StopMe
 
   private class TestActor extends Actor {
-    import Actor._
+    import ActorDsl._
     def receive: Receive = {
       case Allocate(name) =>
         val ref = spawn(new FirstChild, name)
@@ -27,7 +27,7 @@ class ActorHierarchyTests extends munit.FunSuite {
   }
 
   private class FirstChild extends Actor {
-    import Actor._
+    import ActorDsl._
     def receive: Receive = {
       case Allocate(name) =>
         sender ! spawn(new SecondChild, name)

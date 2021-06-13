@@ -48,7 +48,7 @@ class ActorTests extends munit.FunSuite {
       case Allocate =>
         _childRef = spawn(new FooActor, "foo")
       case CheckParent =>
-        import Actor._
+        import ActorDsl._
         _childRef ! CheckParent
       case StopChild =>
         stop(_childRef)
@@ -64,7 +64,7 @@ class ActorTests extends munit.FunSuite {
   }
 
   private class FooActor extends Actor {
-    import Actor._
+    import ActorDsl._
     override def receive: Receive = {
       case CheckParent =>
         sender ! parent()

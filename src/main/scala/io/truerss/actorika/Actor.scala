@@ -142,12 +142,6 @@ trait Actor {
 }
 
 object Actor {
-  implicit class ActorRefExt(val to: ActorRef) extends AnyVal {
-    def !(msg: Any)(implicit from: ActorRef): Unit = {
-      from.send(to, msg)
-    }
-  }
-
   // todo add deadletters
   private[actorika] val empty: Actor = new Actor {
     override def receive: Receive = {
