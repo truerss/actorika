@@ -40,7 +40,7 @@ private[actorika] case class RealActor(
   }
 
   // will called from system level
-  def stop(clear: Boolean = false): Unit = {
+  def stop(clear: Boolean = true): Unit = {
     asStopped()
     ref.associatedMailbox.clear()
     // I use system.stop because I want to remove from `world` too
@@ -202,12 +202,12 @@ private[actorika] case class RealActor(
         actor.preRestart()
       },
       onStopBlock = () => {
-        system.stop(ref)
+        system.stop(ref, clear = false)
       },
       onRestartBlock = () => {}
     )
     if (!result.isStopCalled) {
-      stop()
+      stop(clear = false)
       tryToStart()
     }
   }
