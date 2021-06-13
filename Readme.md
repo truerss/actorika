@@ -20,8 +20,6 @@ system.send(fooRef, "test")
 
 ```
 
-// builder[T <: Actor](params...)
-
 ### Event Stream 
 
 ```scala
