@@ -74,7 +74,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
   }
 
   private def resolveStrategy(ref: ActorRef, xs: Vector[StrategyF]): Vector[StrategyF] = {
-    Option(world.get(ref.path)) match {
+    findMe(ref) match {
       case Some(ra) if ra.ref.isSystemRef =>
         xs :+ _defaultStrategy
       case Some(ra) =>
@@ -155,13 +155,13 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
   }
 
   private[actorika] def findParent(ref: ActorRef): Option[RealActor] = {
-    Option(world.get(ref.path)) match {
+    findMe(ref) match {
       case Some(ra) =>
         val parent = ra.actor._parent
         if (parent.isSystemRef) {
           Some(systemActor)
         } else {
-          Option(parent).map(x => world.get(x.path))
+          Option(parent).flatMap(x => findMe(x))
         }
 
       case None =>
@@ -207,7 +207,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
   // @note any exceptions in `stop` will be ignored
   def stop(ref: ActorRef): Unit = {
     logger.debug(s"Stop ${ref.path}")
-    Option(world.get(ref.path)) match {
+    findMe(ref) match {
       case Some(ra) =>
         ra.stop()
         rm(ref)
@@ -228,25 +228,25 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
    */
   def restart(ref: ActorRef): Unit = {
     logger.debug(s"Restart ${ref.path}-actor")
-    Option(world.get(ref.path)).foreach { x =>
+    findMe(ref).foreach { x =>
       x.tryToRestart(Vector.empty, None)
     }
   }
 
   def subscribe[T](ref: ActorRef, klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
-    Option(world.get(ref.path)).foreach { actor =>
+    findMe(ref).foreach { actor =>
       actor.subscribe(klass)
     }
   }
 
   def unsubscribe[T](ref: ActorRef, klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
-    Option(world.get(ref.path)).foreach { actor =>
+    findMe(ref).foreach { actor =>
       actor.unsubscribe(klass)
     }
   }
 
   def unsubscribe(ref: ActorRef): Unit = {
-    Option(world.get(ref.path)).foreach { actor =>
+    findMe(ref).foreach { actor =>
       actor.unsubscribe()
     }
   }
