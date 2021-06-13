@@ -43,7 +43,8 @@ private[actorika] case class RealActor(
   def stop(): Unit = {
     asStopped()
     ref.associatedMailbox.clear()
-    actor._children.forEach { (_, ch) => ch.stop() }
+    // I use system.stop because I want to remove from `world` too
+    actor._children.forEach { (_, ch) => system.stop(ch.ref) }
     try {
       actor.postStop()
     } catch {
@@ -59,6 +60,8 @@ private[actorika] case class RealActor(
           logger.warn(s"Can not detect parent of $ref")
       }
     }
+    // and remove from the system
+    system.rm(ref)
   }
 
   def stopMe(cref: ActorRef): Unit = {

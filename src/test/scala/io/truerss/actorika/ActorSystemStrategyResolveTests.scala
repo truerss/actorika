@@ -50,10 +50,9 @@ class ActorSystemStrategyResolveTests extends munit.FunSuite {
 
     Thread.sleep(100)
     // check
-    assertEquals(system.world.size(), 2)
+    assertEquals(system.world.size(), 4)
     // check strategies
-    val a2 = system.world.asScala.find(x => x._1.contains(a1.path))
-      .get._2.actor._children.asScala.find(x => x._1.contains("a2")).get._2
+    val a2 = system.world.asScala.find(x => x._1.contains("a2")).get._2
     val a2s = system.resolveStrategy(a2.ref)
     assertEquals(a2s.size, 3)
     val ex = new Exception("boom")

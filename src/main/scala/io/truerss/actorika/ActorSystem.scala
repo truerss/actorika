@@ -3,7 +3,7 @@ package io.truerss.actorika
 import org.slf4j.LoggerFactory
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
-import java.util.concurrent.{Executor, Executors, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
+import java.util.concurrent.{Executor, ExecutorService, Executors, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
 import java.util.{ArrayList => AL}
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import scala.concurrent.duration.FiniteDuration
@@ -67,7 +67,11 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     resolveStrategy(ref, Vector.empty[StrategyF])
   }
   // root
-  world.put(systemRef.path, systemActor)
+//  world.put(systemRef.path, systemActor)
+
+  def find(path: String): Option[ActorRef] = {
+    world.values().asScala.find(_.ref.path.contains(path)).map(_.ref)
+  }
 
   private def resolveStrategy(ref: ActorRef, xs: Vector[StrategyF]): Vector[StrategyF] = {
     Option(world.get(ref.path)) match {
@@ -153,7 +157,13 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
   private[actorika] def findParent(ref: ActorRef): Option[RealActor] = {
     Option(world.get(ref.path)) match {
       case Some(ra) =>
-        Option(ra.actor._parent).map(x => world.get(x.path))
+        val parent = ra.actor._parent
+        if (parent.isSystemRef) {
+          Some(systemActor)
+        } else {
+          Option(parent).map(x => world.get(x.path))
+        }
+
       case None =>
         None
     }
@@ -200,11 +210,16 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     Option(world.get(ref.path)) match {
       case Some(ra) =>
         ra.stop()
-        world.remove(ref.path)
+        rm(ref)
 
       case None =>
         logger.warn(s"You're trying to stop ${ref.path}-actor, which is not exist in the system")
     }
+  }
+
+  // todo remove after pure tree impl
+  private[actorika] def rm(ref: ActorRef): Unit = {
+    world.remove(ref.path)
   }
 
   /**
@@ -276,9 +291,11 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
   def stop(): Unit = {
     logger.debug(s"Stop $systemName actor-system")
     world.values().forEach(ra => ra.stop())
-    world.clear()
+    // check world.size == 0
     systemActor.stop()
     scheduler.stop()
+    defaultExecutor.asInstanceOf[ExecutorService].shutdown()
+    runner.asInstanceOf[ExecutorService].shutdown()
     _onTerminationFunction.apply()
     stopSystem = true
   }
@@ -299,19 +316,6 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
       address.merge(name)
     } else {
       parent.address.merge(name)
-    }
-  }
-
-  private[actorika] def bind(world: CHM[String, RealActor],
-                             realActor: RealActor): RealActor = {
-    Option(world.putIfAbsent(realActor.ref.path, realActor)) match {
-      case Some(prev) if prev == realActor =>
-        realActor
-      case None =>
-        realActor.tryToStart()
-        realActor
-      case _ =>
-        throw new IllegalArgumentException(s"Actor#${realActor.ref.path} already present")
     }
   }
 

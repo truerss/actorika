@@ -131,7 +131,6 @@ trait Actor {
   // user flow
   def stop(): Unit = {
     system.findMe(me).foreach { ra => ra.stop() }
-    system.findMe(parent()).foreach { ra => ra.stopMe(me) }
   }
 
   def stop(ref: ActorRef): Unit = {
