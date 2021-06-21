@@ -14,6 +14,7 @@ class AskTests extends munit.FunSuite {
   private class FooActor(barRef: ActorRef) extends Actor {
     def receive: Receive = {
       case x: Int =>
+        println(s"$me ----> $x")
         implicit val ec = ExecutionContext.fromExecutor(executor)
         val result = me.ask(barRef, x)(1.second)
         result.onComplete {
@@ -36,6 +37,7 @@ class AskTests extends munit.FunSuite {
 
     def receive: Receive = {
       case x: Int =>
+        println(s"$me ----> $x and $flag")
         if (flag) {
           Thread.sleep(1200)
         }
@@ -50,18 +52,18 @@ class AskTests extends munit.FunSuite {
     system.start()
     system.send(foo, 10)
     Thread.sleep(1000)
-    assert(tmp.get() == 10)
+    assert(tmp.get() == 10, s"tmp=${tmp.get()}")
 
     // if exception
     system.send(foo, 0)
     Thread.sleep(1000)
-    assert(tmp.get() == 10)
+    assert(tmp.get() == 10, s"tmp=${tmp.get()}")
     Thread.sleep(100)
     flag = true
     system.send(foo, 100)
     Thread.sleep(1500)
-    assert(tmp.get() == 10)
-    assert(exceptionRaised.get().contains("Timeout 1 second is over on 100 message"))
+    assert(tmp.get() == 10, s"tmp=${tmp.get()}")
+    assert(exceptionRaised.get().contains("Timeout 1 second is over on 100 message"), s"message: ${exceptionRaised.get()}")
     system.stop()
   }
 

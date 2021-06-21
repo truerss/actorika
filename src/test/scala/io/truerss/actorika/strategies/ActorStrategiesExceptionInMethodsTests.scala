@@ -50,8 +50,8 @@ class ActorStrategiesExceptionInMethodsTests extends CommonTest {
     val system = ActorSystem("system")
     val ref = system.spawn(new ExceptionInPreStartAndStopStrategy, "test")
     Thread.sleep(100)
-    val ra = system.world.get(ref.path)
-    assert(Option(ra).isEmpty)
+    val ra = system.findMe(ref)
+    assert(ra.isEmpty, s"ra=$ra")
     assertEquals(stopCounter.get(), 1)
     assertEquals(startCounter.get(), 1)
     assertEquals(restartCounter.get(), 0)
@@ -65,7 +65,7 @@ class ActorStrategiesExceptionInMethodsTests extends CommonTest {
     reset()
     val system = ActorSystem("system")
     val ref = system.spawn(new IgnoreExceptionInPostStop, "test")
-    val ra = system.world.get(ref.path)
+    val ra = system.findMe(ref).get
     assertEquals(ra.actor._state, ActorStates.Live)
     // ok, stop the actor
     system.stop(ref)
@@ -83,7 +83,7 @@ class ActorStrategiesExceptionInMethodsTests extends CommonTest {
     reset()
     val system = ActorSystem("system")
     val ref = system.spawn(new FailedOnRestart, "test123")
-    val ra = system.world.get(ref.path)
+    val ra = system.findMe(ref).get
     assertEquals(ra.actor._state, ActorStates.Live)
     system.send(ref, "boom")
     while (ref.hasMessages) {
@@ -105,10 +105,11 @@ class ActorStrategiesExceptionInMethodsTests extends CommonTest {
     val system = ActorSystem("system", ActorSystemSettings(
       handleDeadLetters = false,
       maxRestartCount = 2,
-      defaultExecutor = null
+      defaultExecutor = null,
+      exceptionOnStart = false
     ))
     val ref = system.spawn(new FailedOnRestart, "test123")
-    val ra = system.world.get(ref.path)
+    val ra = system.findMe(ref).get
     assertEquals(ra.actor._state, ActorStates.Live)
     system.send(ref, "boom")
     while (ref.hasMessages) {

@@ -42,14 +42,14 @@ class ParentResolverTests extends munit.FunSuite {
     val testRef = system.spawn(new TestActor, "test")
     val fooRef = system.spawn(new FooActor, "foo")
     system.start()
-    assert(system.world.size == 2)
+    assert(system.size == 2)
     system.send(fooRef, Start)
     system.send(fooRef, Start1)
     Thread.sleep(100)
-    assert(system.world.size == 4)
-    val baz = system.world.asScala.find(x => x._1.endsWith("baz")).head._2
-
-    assert(system.findMe(baz.ref).get == baz)
+    assert(system.findMe(testRef).get.children.size == 0)
+    assert(system.findMe(fooRef).get.children.size == 1)
+    assert(system.findRealActor("bar").get.children.size == 1)
+    assert(system.findRealActor("baz").get.actor._parent == system.findRealActor("bar").get.ref)
 
     system.stop()
   }

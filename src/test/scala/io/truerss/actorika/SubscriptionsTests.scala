@@ -33,29 +33,34 @@ class SubscriptionsTests extends munit.FunSuite {
       system.publish(Message(x))
     }
     Thread.sleep(100)
-    assertEquals(ref.associatedMailbox.size(), xs.size)
-    assertEquals(ref1.associatedMailbox.size(), 0)
-    assertEquals(ref3.associatedMailbox.size(), xs.size)
+    assertEquals(ref.associatedMailbox.size(), xs.size, s"ref.size=${ref.associatedMailbox.size()} and ${xs.size}")
+    assertEquals(ref1.associatedMailbox.size(), 0, s"ref1.size=${ref1.associatedMailbox.size()}")
+    assertEquals(ref3.associatedMailbox.size(), xs.size, s"ref3.size=${ref3.associatedMailbox.size()}")
     while (ref.hasMessages || ref3.hasMessages) {
-      system.world.forEach { (_, a) => a.tick() }
+      system.systemActor.children.forEach { (_, a) => a.tick() }
     }
     Thread.sleep(100)
-    assertEquals(ref.associatedMailbox.size(), 0)
-    assertEquals(ref3.associatedMailbox.size(), 0)
+    assertEquals(ref.associatedMailbox.size(), 0, s"ref.size=${ref.associatedMailbox.size()}")
+    assertEquals(ref3.associatedMailbox.size(), 0, s"ref3.size=${ref3.associatedMailbox.size()}")
     assertEquals(counter.get(), xs.size*2)
-    assertEquals(ref1.associatedMailbox.size(), 0)
+    assertEquals(ref1.associatedMailbox.size(), 0, s"ref1.size=${ref1.associatedMailbox.size()}")
     // unsubscribe
     system.unsubscribe(ref, classOf[Message])
-    assert(system.world.get(ref.path).subscriptions.isEmpty)
-    assert(!system.world.get(ref3.path).subscriptions.isEmpty)
+    val tmpRef = system.findMe(ref)
+    assert(tmpRef.get.subscriptions.isEmpty, s"isEmpty?=${tmpRef.get.subscriptions.isEmpty}")
+    val tmpRef3 = system.findMe(ref3)
+    assert(!tmpRef3.get.subscriptions.isEmpty, s"!ref3.isEmpty=${tmpRef3.get.subscriptions.isEmpty}")
     system.subscribe(ref, classOf[Message])
     system.subscribe(ref, classOf[Int])
-    assert(system.world.get(ref.path).subscriptions.size == 2)
+    val tmp1Ref = system.findMe(ref)
+    assert(tmp1Ref.get.subscriptions.size == 2, s"ref.size=${tmp1Ref.get.subscriptions.size}")
     system.unsubscribe(ref, classOf[Int])
     system.unsubscribe(ref, classOf[String]) // not present, but ...
-    assert(system.world.get(ref.path).subscriptions.size == 1)
+    val tmp2Ref = system.findMe(ref)
+    assert(tmp2Ref.get.subscriptions.size == 1, s"ref.size=${tmp2Ref.get.subscriptions.size}")
     system.unsubscribe(ref)
-    assert(system.world.get(ref.path).subscriptions.size == 0)
+    val tmp3Ref = system.findMe(ref)
+    assert(tmp3Ref.get.subscriptions.size == 0, s"ref.size=${tmp3Ref.get.subscriptions.size}")
   }
 
 }

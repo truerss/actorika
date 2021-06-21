@@ -28,6 +28,8 @@ licenses += ("MIT", url("http://opensource.org/licenses/MIT"))
 
 publishMavenStyle := true
 
+Test / parallelExecution := false
+
 libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-api" % "1.7.30" % s"$Test,$Provided",
   "ch.qos.logback" % "logback-classic" % "1.2.3" % s"$Test,$Provided",

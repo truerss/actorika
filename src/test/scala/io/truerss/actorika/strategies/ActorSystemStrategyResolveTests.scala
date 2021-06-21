@@ -51,8 +51,6 @@ class ActorSystemStrategyResolveTests extends munit.FunSuite {
     system.send(b1, Spawn)
 
     Thread.sleep(100)
-    // check
-    assertEquals(system.world.size(), 4)
     // check strategies
     val a2 = system.find("a2").get
     val a2s = system.resolveStrategy(a2)

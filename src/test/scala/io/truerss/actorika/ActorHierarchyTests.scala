@@ -3,7 +3,6 @@ package io.truerss.actorika
 import java.util.concurrent.{ConcurrentLinkedQueue, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.{Await, Future}
-import scala.concurrent.duration.FiniteDuration
 
 class ActorHierarchyTests extends munit.FunSuite {
 
@@ -108,7 +107,7 @@ class ActorHierarchyTests extends munit.FunSuite {
     Thread.sleep(100)
     system.stop()
     Thread.sleep(100)
-    assert(system.world.isEmpty)
+    assert(system.isEmpty)
   }
 
 

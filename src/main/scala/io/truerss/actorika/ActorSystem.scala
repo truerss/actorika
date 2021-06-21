@@ -3,8 +3,8 @@ package io.truerss.actorika
 import org.slf4j.LoggerFactory
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
-import java.util.concurrent.{Executor, ExecutorService, Executors, ThreadFactory, ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
-import java.util.{ArrayList => AL}
+import java.util.concurrent.{Executor, ExecutorService, Executors, ThreadFactory, ConcurrentLinkedQueue => CLQ}
+import java.util.{UUID, ArrayList => AL}
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import scala.concurrent.duration.FiniteDuration
 import scala.jdk.CollectionConverters._
@@ -13,8 +13,6 @@ import scala.reflect.runtime.universe._
 case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
 
   import ActorSystem._
-
-  val address: Address = Address(systemName)
 
   private val globalCounter = new AtomicLong(0)
 
@@ -25,9 +23,13 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
 
   @volatile private[actorika] var stopSystem = false
 
+  private val id = UUID.randomUUID()
+
+  val address: Address = Address(systemName)
+
   private def createDefaultExecutor: Executor = {
     Executors.newFixedThreadPool(cores,
-      threadFactory(s"$systemName-default")
+      threadFactory(s"$systemName-default-$id")
     )
   }
 
@@ -39,11 +41,11 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
   implicit val context: ExecutionContextExecutor = ExecutionContext.fromExecutor(executor)
 
   private val runner: Executor = Executors.newSingleThreadExecutor(
-    threadFactory(s"$systemName-runner")
+    threadFactory(s"$systemName-runner-$id")
   )
 
   private[actorika] val scheduler: Scheduler =
-    new Scheduler(threadFactory(s"$systemName-scheduler"))
+    new Scheduler(threadFactory(s"$systemName-scheduler-$id"))
 
   // no messages for processing
   private val systemRef: ActorRef = ActorRef(
@@ -52,13 +54,16 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     new CLQ[ActorMessage](new AL[ActorMessage](0))
   )
 
-  private val systemActor: RealActor = RealActor(
+  private[actorika] val systemActor: RealActor = RealActor(
     actor = Actor.empty,
     ref = systemRef,
     system = this
   )
 
-  private[actorika] val world: CHM[String, RealActor] = new CHM[String, RealActor]()
+  private[actorika] def isEmpty: Boolean = systemActor.children.isEmpty
+
+  // root size
+  private[actorika] def size: Int = systemActor.children.size
 
   private val _defaultStrategy: StrategyF = (ex: Throwable, fm: Option[Any], c: Int) =>
     ActorStrategies.Stop
@@ -66,15 +71,40 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
   private[actorika] def resolveStrategy(ref: ActorRef): Vector[StrategyF] = {
     resolveStrategy(ref, Vector.empty[StrategyF])
   }
-  // root
-//  world.put(systemRef.path, systemActor)
 
   def find(path: String): Option[ActorRef] = {
     findRealActor(path).map(_.ref)
   }
 
   private[actorika] def findRealActor(path: String): Option[RealActor] = {
-    world.values().asScala.find(_.ref.path.contains(path))
+    systemActor.children.asScala.find { case (p, _) => p.contains(path) } match {
+      case Some((_, ra)) =>
+        Some(ra)
+      case None =>
+        systemActor.children.values().asScala.to(LazyList)
+          .map { x =>
+            findRealActor(x, path)
+          }.collectFirst {
+          case Some(r) => r
+        }
+    }
+  }
+
+  private[actorika] def findRealActor(ra: RealActor, path: String): Option[RealActor] = {
+    if (ra.ref.path.contains(path)) {
+      Some(ra)
+    } else {
+      val chs = ra.children
+      chs.asScala.find { case (p, _) => p.contains(path) } match {
+        case Some((_, ra)) => Some(ra)
+        case None =>
+          chs.values().asScala.to(LazyList)
+            .map { x => findRealActor(x, path) }
+            .collectFirst {
+              case Some(r) => r
+            }
+      }
+    }
   }
 
   private def resolveStrategy(ref: ActorRef, xs: Vector[StrategyF]): Vector[StrategyF] = {
@@ -134,28 +164,36 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
       ref = ref,
       system = this
     )
-    Option(world.putIfAbsent(realActor.ref.path, realActor)) match {
-      case Some(prev) if prev == realActor =>
-        realActor
+    findMe(parent) match {
+      case Some(p) =>
+        Option(p.actor._children.putIfAbsent(realActor.ref.path, realActor)) match {
+          case Some(prev) if prev == realActor =>
+            realActor
+          case None =>
+            realActor.tryToStart()
+            if (realActor.isStopped) {
+              p.actor._children.remove(realActor.ref.path)
+              val message = s"Failed to start actor: ${ref.path} under ${parent.path}"
+              logger.warn(message)
+              if (settings.exceptionOnStart) {
+                throw new RuntimeException(message)
+              }
+            }
+            realActor
+          case _ =>
+            throw new IllegalArgumentException(s"Actor#${realActor.ref.path} already present")
+        }
       case None =>
-        realActor.tryToStart()
-        realActor
-      case _ =>
-        throw new IllegalArgumentException(s"Actor#${realActor.ref.path} already present")
+        throw new IllegalArgumentException(s"Actor#${parent.path} is not exist")
     }
+
   }
 
   private[actorika] def spawn(actor: Actor,
                               name: String,
                               parent: ActorRef
                              ): ActorRef = {
-    // push into world
-    val realActor = allocate(actor, name, parent)
-    if (parent.isSystemRef) {
-      // ok
-      systemActor.actor._children.put(realActor.ref.path, realActor)
-    }
-    realActor.ref
+    allocate(actor, name, parent).ref
   }
 
   private[actorika] def findParent(ref: ActorRef): Option[RealActor] = {
@@ -174,17 +212,20 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
   }
 
   private[actorika] def findMe(ref: ActorRef): Option[RealActor] = {
-    Option(world.get(ref.path)) match {
-      case Some(ra) => // fast check
-        Some(ra)
-      case None =>
-        // find in actor's hierarchy
-        world.values().asScala.to(LazyList)
-          .map { x =>
-            findMe(x, ref)
-          }.collectFirst {
+    if (ref.isSystemRef) {
+      Some(systemActor)
+    } else {
+      Option(systemActor.children.get(ref.path)) match {
+        case Some(ra) =>
+          Some(ra)
+        case None =>
+          systemActor.children.values().asScala.to(LazyList)
+            .map { x =>
+              findMe(x, ref)
+            }.collectFirst {
             case Some(r) => r
-        }
+          }
+      }
     }
   }
 
@@ -209,26 +250,14 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
 
   // @note any exceptions in `stop` will be ignored
   def stop(ref: ActorRef): Unit = {
-    stop(ref, clear = true)
-  }
-
-  private[actorika] def stop(ref: ActorRef, clear: Boolean): Unit = {
     logger.debug(s"Stop ${ref.path}")
     findMe(ref) match {
       case Some(ra) =>
-        ra.stop(clear)
-        if (clear) {
-          rm(ref)
-        }
+        ra.stop()
 
       case None =>
         logger.warn(s"You're trying to stop ${ref.path}-actor, which is not exist in the system")
     }
-  }
-
-  // todo remove after pure tree impl
-  private[actorika] def rm(ref: ActorRef): Unit = {
-    world.remove(ref.path)
   }
 
   /**
@@ -236,7 +265,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
    * @param ref - actor reference
    */
   private[actorika] def restart(ref: ActorRef): Unit = {
-    logger.debug(s"Restart ${ref.path}-actor")
+    logger.debug(s"Restart ${ref.path}")
     findMe(ref).foreach { x =>
       x.tryToRestart(Vector.empty, None)
     }
@@ -261,17 +290,33 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
   }
 
   def publish[T](message: T)(implicit _tag: TypeTag[T]): Unit = {
-    var handled = false
-    world.forEach { (_, actor) =>
-      if (actor.canHandle(message)) {
-        handled = true
-        systemRef.send(actor.ref, message)
-      }
-    }
-    if (!handled) {
+    val handlers = systemActor.children.values().asScala.to(LazyList)
+      .map { x =>
+        canHandle(x, message)
+      }.collect {
+      case xs if xs.nonEmpty => xs
+    }.flatten
+
+    if (handlers.isEmpty) {
       logger.warn(s"Can not publish: $message, there are no actors to handle the message")
       _deadLettersHandler.handle(message, systemRef, systemRef)
+    } else {
+      handlers.foreach { h => systemRef.send(h.ref, message) }
     }
+  }
+
+  private def canHandle[T](ra: RealActor, message: T)(implicit _tag: TypeTag[T]): LazyList[RealActor] = {
+    val root = if (ra.canHandle(message)) {
+      Some(ra)
+    } else {
+      None
+    }
+    val inChs = ra.children.asScala.values.to(LazyList)
+      .map { x => canHandle(x, message) }
+      .collect {
+        case xs if xs.nonEmpty => xs
+      }
+    root.map { x => inChs.flatten :+ x }.getOrElse(inChs.flatten)
   }
 
 
@@ -289,7 +334,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     runner.execute(new Runnable {
       override def run(): Unit = {
         while (!stopSystem) {
-          world.forEach { (_, actor) =>
+          systemActor.children.forEach { (_, actor) =>
             actor.tick()
           }
         }
@@ -299,8 +344,6 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
 
   def stop(): Unit = {
     logger.debug(s"Stop $systemName actor-system")
-    world.values().forEach(ra => ra.stop())
-    // check world.size == 0
     systemActor.stop()
     scheduler.stop()
     defaultExecutor.asInstanceOf[ExecutorService].shutdown()

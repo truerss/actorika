@@ -61,9 +61,6 @@ trait Actor {
 
   protected def parent(): ActorRef = _parent
 
-  def parent1(): ActorRef = _parent
-
-
   private var _system: ActorSystem = null
 
   private[actorika] def setSystem(s: ActorSystem): Unit = {
@@ -123,9 +120,7 @@ trait Actor {
   def onUnhandled(msg: Any): Unit = {}
 
   def spawn(actor: Actor, name: String): ActorRef = {
-    val ra = system.allocate(actor, name, me)
-    _children.put(ra.ref.path, ra)
-    ra.ref
+    system.allocate(actor, name, me).ref
   }
 
   // user flow
@@ -142,7 +137,7 @@ trait Actor {
 }
 
 object Actor {
-  private[actorika] val empty: Actor = new Actor {
+  private[actorika] def empty: Actor = new Actor {
     override def receive: Receive = {
       case message =>
         system._deadLettersHandler.handle(message, me, sender)

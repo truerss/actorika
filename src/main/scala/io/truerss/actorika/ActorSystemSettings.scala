@@ -5,14 +5,16 @@ import java.util.concurrent.Executor
 case class ActorSystemSettings(
                                 handleDeadLetters: Boolean,
                                 maxRestartCount: Int,
-                                defaultExecutor: Executor
+                                defaultExecutor: Executor,
+                                exceptionOnStart: Boolean
                         )
 
 object ActorSystemSettings {
   val default: ActorSystemSettings = new ActorSystemSettings(
     handleDeadLetters = true,
     maxRestartCount = 100,
-    defaultExecutor = null
+    defaultExecutor = null,
+    exceptionOnStart = false
   )
 
 }

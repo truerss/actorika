@@ -12,7 +12,7 @@ class ActorSystemTests extends munit.FunSuite {
       flag = true
     }
 
-    def receive = {
+    def receive: Receive = {
       case _ =>
     }
   }
@@ -24,13 +24,13 @@ class ActorSystemTests extends munit.FunSuite {
     system.spawn(new TestActor, "test")
     system.start()
     Thread.sleep(100)
-    assertEquals(system.world.size(), 1)
+    assertEquals(system.systemActor.children.size(), 1)
     assert(!system.stopSystem)
     // stop then
     system.stop()
     Thread.sleep(100)
     assert(system.stopSystem)
-    assert(system.world.isEmpty)
+    assert(system.isEmpty)
     assert(flag)
     assert(stopped)
   }
@@ -39,9 +39,37 @@ class ActorSystemTests extends munit.FunSuite {
     val system = ActorSystem("test")
     val xs = 0 to 2
     xs.foreach { _ => system.spawn(new TestActor) }
-    assertEquals(system.world.size(), xs.size)
-    system.world.asScala.foreach { x =>
+    Thread.sleep(100)
+    assertEquals(system.systemActor.children.size, xs.size)
+    system.systemActor.children.asScala.foreach { x =>
       assert(x._1.contains("actor-"))
+    }
+  }
+
+  test("failed to start actor") {
+    try {
+      val system = ActorSystem("test")
+      system.spawn(new TestActor, "@asd)")
+      assert(false, "oops")
+    } catch {
+      case ex: Throwable =>
+        assert(ex.getMessage.contains("Invalid actor name:"))
+    }
+  }
+
+  test("findParent#None") {
+    val system = ActorSystem("test")
+    assert(system.findParent(ActorRef(Address("asd"))).isEmpty)
+  }
+
+  test("exception when parent is not exist") {
+    val system = ActorSystem("test")
+    try {
+      system.allocate(new TestActor, "asd", ActorRef(Address("abc")))
+      assert(false)
+    } catch {
+      case ex: Throwable =>
+        assert(ex.getMessage.contains(s"Actor#abc is not exist"))
     }
   }
 

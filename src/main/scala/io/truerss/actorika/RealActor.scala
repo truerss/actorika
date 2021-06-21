@@ -1,6 +1,6 @@
 package io.truerss.actorika
 
-import java.util.concurrent.{ConcurrentLinkedQueue => CLQ}
+import java.util.concurrent.{ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
 import scala.collection.mutable.{ArrayBuffer => AB}
 import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
@@ -21,6 +21,10 @@ private[actorika] case class RealActor(
   @volatile private var inProcess = false
 
   private val path = ref.path
+
+  def children: CHM[String, RealActor] = actor._children
+
+  def isStopped: Boolean = actor._state == ActorStates.Stopped
 
   // proxy call
   def moveStateTo(to: ActorStates.ActorState): Unit = {
@@ -55,14 +59,12 @@ private[actorika] case class RealActor(
     if (!ref.isSystemRef) {
       system.findParent(ref) match {
         case Some(parent) =>
-          Option(parent).foreach(_.stopMe(ref))
+          if (clear) {
+            Option(parent).foreach(_.stopMe(ref))
+          }
         case None =>
           logger.warn(s"Can not detect parent of $ref")
       }
-    }
-    if (clear) {
-      // and remove from the system
-      system.rm(ref)
     }
   }
 
@@ -202,12 +204,12 @@ private[actorika] case class RealActor(
         actor.preRestart()
       },
       onStopBlock = () => {
-        system.stop(ref, clear = false)
+        system.stop(ref)
       },
       onRestartBlock = () => {}
     )
     if (!result.isStopCalled) {
-      stop(clear = false)
+      stop(false)
       tryToStart()
     }
   }

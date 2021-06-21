@@ -26,7 +26,7 @@ class StopStrategyTests extends CommonTest {
     val ref = system.spawn(new StopStrategy, "test")
     system.send(ref, "boom")
     Thread.sleep(100)
-    assertEquals(system.world.size(), 0)
+    assert(system.isEmpty)
     assertEquals(stopCounter.get(), 1)
     assertEquals(startCounter.get(), 1)
     assertEquals(restartCounter.get(), 0)

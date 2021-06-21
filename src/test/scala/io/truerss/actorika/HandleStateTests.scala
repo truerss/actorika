@@ -25,7 +25,7 @@ class HandleStateTests extends munit.FunSuite {
     xs.foreach { x =>
       system.send(ref, x)
     }
-    val ra = system.world.get(ref.path)
+    val ra = system.findMe(ref).get
     while (ref.hasMessages) {
       ra.tick()
     }

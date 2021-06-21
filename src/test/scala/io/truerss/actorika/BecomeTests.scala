@@ -47,7 +47,7 @@ class BecomeTests extends munit.FunSuite {
   test("become: switch actor state") {
     val system = ActorSystem("system")
     val ref = system.spawn(new TestActor, "test")
-    val ra = system.world.get(ref.path)
+    val ra = system.findMe(ref).get
     system.send(ref, Set(3))
     tick(ra)
     assert(checker.get() == 6)

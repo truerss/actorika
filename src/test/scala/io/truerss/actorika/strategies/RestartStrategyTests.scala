@@ -27,9 +27,9 @@ class RestartStrategyTests extends CommonTest {
       Thread.sleep(100)
     }
     again()
-    assertEquals(stopCounter.get(), 1)
-    assertEquals(startCounter.get(), 2)
-    assertEquals(restartCounter.get(), 1)
+    assertEquals(stopCounter.get(), 1, s"stop counter: ${stopCounter.get()}")
+    assertEquals(startCounter.get(), 2, s"start counter: ${startCounter.get()}")
+    assertEquals(restartCounter.get(), 1, s"restart counter: ${restartCounter.get()}")
     assertEquals(
       states.asScala.toVector,
       Vector(
@@ -39,12 +39,12 @@ class RestartStrategyTests extends CommonTest {
       )
     )
     again()
-    assert(system.world.size() == 1)
-    assertEquals(stopCounter.get(), 2)
-    assertEquals(restartCounter.get(), 2)
-    assertEquals(startCounter.get(), 3)
-    assertEquals(receivedMessages.size(), 2)
-    assertEquals(receivedExceptions.size(), 2)
+    assert(system.systemActor.children.size == 1, s"real=${system.systemActor.children.size}")
+    assertEquals(stopCounter.get(), 2, s"stop counter: ${stopCounter.get()}")
+    assertEquals(restartCounter.get(), 2, s"restart counter: ${restartCounter.get()}")
+    assertEquals(startCounter.get(), 3, s"start counter: ${startCounter.get()}")
+    assertEquals(receivedMessages.size(), 2, s"receivedMessages=${receivedMessages.size()}")
+    assertEquals(receivedExceptions.size(), 2, s"receivedExceptions=${receivedExceptions.size()}")
     system.stop()
   }
 

@@ -2,6 +2,7 @@ package io.truerss.actorika
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ConcurrentLinkedQueue => CLQ}
+import scala.jdk.CollectionConverters._
 
 class ActorTests extends munit.FunSuite {
 
@@ -90,14 +91,14 @@ class ActorTests extends munit.FunSuite {
     system.send(ref, "message")
     // ok, actor was registered
     assertEquals(preStartCalled.get(), 1)
-    assertEquals(system.world.size(), 1)
+    assertEquals(system.size, 1)
     assertEquals(ref.associatedMailbox.size(), 1)
-    val ra = system.world.get(ref.path)
+    val ra = system.findRealActor(ref.path).get
     assertEquals(ra.actor._state, ActorStates.Live)
     // try to restart
     system.restart(ref)
-
-    assertEquals(system.world.size(), 1)
+    Thread.sleep(100)
+    assertEquals(system.size, 1)
     assertEquals(preStartCalled.get(), 2)
     assertEquals(preRestartCalled.get(), 1)
     assertEquals(postStopCalled.get(), 1)
@@ -106,7 +107,6 @@ class ActorTests extends munit.FunSuite {
     system.stop(ref)
     Thread.sleep(100)
     assertEquals(ref.associatedMailbox.size(), 0)
-    assertEquals(system.world.size(), 0)
     assertEquals(preStartCalled.get(), 2)
     assertEquals(preRestartCalled.get(), 1)
     assertEquals(postStopCalled.get(), 2)
@@ -114,6 +114,7 @@ class ActorTests extends munit.FunSuite {
   }
 
   test("address must be unique") {
+    reset()
     val system = ActorSystem("test-system")
     system.spawn(new TestActor, "actor")
     try {
@@ -125,20 +126,20 @@ class ActorTests extends munit.FunSuite {
         assert(cond = true)
     }
     system.spawn(new FooActor, "foo")
-    assertEquals(system.world.size(), 2)
+    assertEquals(system.size, 2)
   }
 
   test("can be stopped programmatically") {
     reset()
     val system = ActorSystem("test-system")
-    val ref = system.spawn(new TestActor, "actor")
+    val ref = system.spawn(new TestActor, "actor1")
     system.send(ref, Stop)
     system.send(ref, "asd")
-    val ra = system.world.get(ref.path)
+    val ra = system.findRealActor(ref.path).get
     ra.tick()
     // sync time +-
     Thread.sleep(100)
-    assertEquals(system.world.size(), 0)
+    assertEquals(system.size, 0)
     assertEquals(ref.associatedMailbox.size(), 0)
     assertEquals(postStopCalled.get(), 1)
     assertEquals(preRestartCalled.get(), 0)
@@ -148,29 +149,27 @@ class ActorTests extends munit.FunSuite {
   test("check system and context") {
     reset()
     val system = ActorSystem("test-system")
-    val ref = system.spawn(new TestActor, "actor")
+    val ref = system.spawn(new TestActor, "actor2")
     system.send(ref, GetSystem)
-    system.world.get(ref.path).tick()
+    system.findRealActor(ref.path).get.tick()
     Thread.sleep(100)
     assertEquals(_currentSystem, system)
     assert(_currentSender.isSystemRef)
     assertEquals(_currentSender.path, system.systemName)
-    assert(_currentThreadName.startsWith(s"${system.address.name}-default-pool-"))
+    assert(_currentThreadName.startsWith(s"${system.address.name}-default-"))
   }
 
   test("create sub-actors") {
-    import scala.jdk.CollectionConverters._
     reset()
     val system = ActorSystem("test-system")
-    val ref = system.spawn(new TestActor, "actor")
+    val ref = system.spawn(new TestActor, "actor3")
     system.send(ref, Allocate)
-    system.world.get(ref.path).tick()
+    system.findRealActor(ref.path).get.tick()
     Thread.sleep(100)
-    assertEquals(system.world.size, 2)
     // check parent
     system.send(ref, CheckParent)
-    system.world.get(ref.path).tick()
-    val ch = system.world.get(s"${ref.path}/foo")
+    system.findRealActor(ref.path).get.tick()
+    val ch = system.findRealActor(s"${ref.path}/foo").get
     Thread.sleep(100)
     assertEquals(ch.ref.associatedMailbox.size(), 1)
     ch.tick()
@@ -181,11 +180,11 @@ class ActorTests extends munit.FunSuite {
     // stop
     system.send(ref, StopChild)
     while (!ref.associatedMailbox.isEmpty) {
-      system.world.get(ref.path).tick()
+      system.findRealActor(ref.path).get.tick()
     }
     Thread.sleep(100)
-    assertEquals(system.world.size(), 1)
-    assertEquals(system.world.keys().asScala.toVector, Vector(ref.path))
+    assertEquals(system.size, 1)
+    assertEquals(system.systemActor.children.keys().asScala.toVector, Vector(ref.path))
   }
 
   test("unhandled check [deadletters]") {
@@ -197,7 +196,7 @@ class ActorTests extends munit.FunSuite {
       system.send(ref, x)
     }
     while (!ref.associatedMailbox.isEmpty) {
-      system.world.get(ref.path).tick()
+      system.findRealActor(ref.path).get.tick()
     }
     Thread.sleep(100)
     assertEquals(mailbox.size(), xs.size)
@@ -211,7 +210,7 @@ class ActorTests extends munit.FunSuite {
     xs.foreach { x =>
       system.send(ref, x)
     }
-    val ra = system.world.get(ref.path)
+    val ra = system.findRealActor(ref.path).get
     // actor is ready
     assertEquals(ra.actor._state, ActorStates.Live)
     assertEquals(ref.associatedMailbox.size, xs.size)
@@ -248,10 +247,10 @@ class ActorTests extends munit.FunSuite {
     val xs = 0 to 3
     xs.foreach { x => system.send(ref, x)  }
     // hack
-    system.world.get(ref.path).actor.moveStateTo(ActorStates.Stopped) // mark as stop
+    system.findRealActor(ref.path).get.actor.moveStateTo(ActorStates.Stopped) // mark as stop
     // then send messages
     while(ref.hasMessages) {
-      system.world.get(ref.path).tick()
+      system.findRealActor(ref.path).get.tick()
     }
     Thread.sleep(100)
     assertEquals(messages.size, xs.size)
