@@ -16,12 +16,12 @@ class FooActor extends Actor {
 val system = ActorSystem("test")
 val fooRef = system.spawn(new FooActor, "foo")
 system.send(fooRef, "test")
-
+```
 
 #### Note: The library does not use `Props/Builder` for create actors, instead of this you need to define
 additional properties in `preStart` method:
   
-```  
+```scala  
 // actorika
 class FooActor extends Actor {
   override def preStart() = {
