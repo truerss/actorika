@@ -5,6 +5,7 @@ import scala.collection.mutable.{ArrayBuffer => AB}
 import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
 import scala.reflect.runtime.universe._
+import scala.jdk.CollectionConverters._
 
 // internal
 private[actorika] case class RealActor(
@@ -85,7 +86,7 @@ private[actorika] case class RealActor(
   }
 
   def canHandle[T](v: T)(implicit tag: TypeTag[T]): Boolean = {
-    subscriptions.contains(tag.tpe)
+    subscriptions.asScala.exists { x => tag.tpe <:< x }
   }
 
   def tick(): Unit = {

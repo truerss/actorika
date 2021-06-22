@@ -18,6 +18,26 @@ val fooRef = system.spawn(new FooActor, "foo")
 system.send(fooRef, "test")
 
 
+#### Note: The library does not use `Props/Builder` for create actors, instead of this you need to define
+additional properties in `preStart` method:
+  
+```  
+// actorika
+class FooActor extends Actor {
+  override def preStart() = {
+    scheduler.once(1.seconds) { () =>
+       //
+    }
+    system.subscribe(me, classOf[BaseMessage])
+  }
+}
+
+// akka
+class FooActor extends Actor {
+  system.context.scheduler.scheduleAtOnce ...
+  system.context.subscribe(self, classOf[BaseMessage])
+}
+
 ```
 
 ### Event Stream 

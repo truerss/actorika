@@ -7,11 +7,18 @@ class SubscriptionsTests extends munit.FunSuite {
 
   private case class Message(id: Int)
 
+  sealed trait BaseMessage
+  case class Message1(id: Int) extends BaseMessage
+  case class Message2(id: String) extends BaseMessage
+
+
   private val counter = new AtomicInteger(0)
   private val unhandled = new CLQ[Any]()
 
   private class TestActor extends Actor {
     def receive: Receive = {
+      case _: BaseMessage =>
+        counter.incrementAndGet()
       case Message(_) =>
         counter.incrementAndGet()
     }
@@ -62,5 +69,19 @@ class SubscriptionsTests extends munit.FunSuite {
     val tmp3Ref = system.findMe(ref)
     assert(tmp3Ref.get.subscriptions.size == 0, s"ref.size=${tmp3Ref.get.subscriptions.size}")
   }
+
+  test("handle subtypes") {
+    counter.set(0)
+    val system = ActorSystem("test")
+    system.start()
+    val ref = system.spawn(new TestActor)
+    system.subscribe(ref, classOf[BaseMessage])
+    system.publish(Message1(123))
+    system.publish(Message2("123"))
+    Thread.sleep(100)
+    assert(counter.get() == 2)
+    system.stop()
+  }
+
 
 }
