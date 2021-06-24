@@ -4,11 +4,11 @@ import org.slf4j.LoggerFactory
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{Executor, ExecutorService, Executors, ThreadFactory, ConcurrentLinkedQueue => CLQ}
-import java.util.{UUID, ArrayList => AL}
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
+import java.util.{ArrayList => AL}
 import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import scala.jdk.CollectionConverters._
-import scala.reflect.runtime.universe._
+import scala.reflect.ClassTag
 
 case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
 
@@ -269,13 +269,13 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     }
   }
 
-  def subscribe[T](ref: ActorRef, klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
+  def subscribe[T](ref: ActorRef, klass: Class[T]): Unit = {
     findMe(ref).foreach { actor =>
       actor.subscribe(klass)
     }
   }
 
-  def unsubscribe[T](ref: ActorRef, klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
+  def unsubscribe[T](ref: ActorRef, klass: Class[T]): Unit = {
     findMe(ref).foreach { actor =>
       actor.unsubscribe(klass)
     }
@@ -287,7 +287,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     }
   }
 
-  def publish[T](message: T)(implicit _tag: TypeTag[T]): Unit = {
+  def publish[T](message: T)(implicit kTag: ClassTag[T]): Unit = {
     val handlers = systemActor.children.values().asScala.to(LazyList)
       .map { x =>
         canHandle(x, message)
@@ -303,14 +303,14 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     }
   }
 
-  private def canHandle[T](ra: RealActor, message: T)(implicit _tag: TypeTag[T]): LazyList[RealActor] = {
-    val root = if (ra.canHandle(message)) {
+  private def canHandle[T](ra: RealActor, message: T)(implicit kTag: ClassTag[T]): LazyList[RealActor] = {
+    val root = if (ra.canHandle(message)(kTag)) {
       Some(ra)
     } else {
       None
     }
     val inChs = ra.children.asScala.values.to(LazyList)
-      .map { x => canHandle(x, message) }
+      .map { x => canHandle(x, message)(kTag) }
       .collect {
         case xs if xs.nonEmpty => xs
       }

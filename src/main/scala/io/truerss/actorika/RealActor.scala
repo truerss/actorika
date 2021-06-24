@@ -4,8 +4,8 @@ import java.util.concurrent.{ConcurrentHashMap => CHM, ConcurrentLinkedQueue => 
 import scala.collection.mutable.{ArrayBuffer => AB}
 import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
-import scala.reflect.runtime.universe._
 import scala.jdk.CollectionConverters._
+import scala.reflect.ClassTag
 
 // internal
 private[actorika] case class RealActor(
@@ -17,7 +17,7 @@ private[actorika] case class RealActor(
   import RealActor._
   import ActorSystem.logger
 
-  private[actorika] val subscriptions = new CLQ[Type]()
+  private[actorika] val subscriptions = new CLQ[Class[_]]()
 
   @volatile private var inProcess = false
 
@@ -73,20 +73,20 @@ private[actorika] case class RealActor(
     actor._children.remove(cref.path)
   }
 
-  def subscribe[T](klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
-    subscriptions.add(_tag.tpe)
+  def subscribe[T](klass: Class[T]): Unit = {
+    subscriptions.add(klass)
   }
 
-  def unsubscribe[T](klass: Class[T])(implicit _tag: TypeTag[T]): Unit = {
-    subscriptions.remove(_tag.tpe)
+  def unsubscribe[T](klass: Class[T]): Unit = {
+    subscriptions.remove(klass)
   }
 
   def unsubscribe(): Unit = {
     subscriptions.clear()
   }
 
-  def canHandle[T](v: T)(implicit tag: TypeTag[T]): Boolean = {
-    subscriptions.asScala.exists { x => tag.tpe <:< x }
+  def canHandle[T](v: T)(implicit kTag: ClassTag[T]): Boolean = {
+    subscriptions.asScala.exists { x => x.isAssignableFrom(kTag.runtimeClass) }
   }
 
   def tick(): Unit = {
