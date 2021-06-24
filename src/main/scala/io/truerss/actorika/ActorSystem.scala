@@ -23,13 +23,11 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
 
   @volatile private[actorika] var stopSystem = false
 
-  private val id = UUID.randomUUID()
-
   val address: Address = Address(systemName)
 
   private def createDefaultExecutor: Executor = {
     Executors.newFixedThreadPool(cores,
-      threadFactory(s"$systemName-default-$id")
+      threadFactory(s"$systemName-worker-pool")
     )
   }
 
@@ -41,11 +39,11 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
   implicit val context: ExecutionContextExecutor = ExecutionContext.fromExecutor(executor)
 
   private val runner: Executor = Executors.newSingleThreadExecutor(
-    threadFactory(s"$systemName-runner-$id")
+    threadFactory(s"$systemName-runner")
   )
 
   private[actorika] val scheduler: Scheduler =
-    new Scheduler(threadFactory(s"$systemName-scheduler-$id"))
+    new Scheduler(threadFactory(s"$systemName-scheduler"))
 
   // no messages for processing
   private val systemRef: ActorRef = ActorRef(
@@ -298,7 +296,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
     }.flatten
 
     if (handlers.isEmpty) {
-      logger.warn(s"Can not publish: $message, there are no actors to handle the message")
+      logger.warn(s"Can not publish: ${message.getClass}, there are no actors to handle the message")
       _deadLettersHandler.handle(message, systemRef, systemRef)
     } else {
       handlers.foreach { h => systemRef.send(h.ref, message) }

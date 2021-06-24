@@ -156,7 +156,7 @@ class ActorTests extends munit.FunSuite {
     assertEquals(_currentSystem, system)
     assert(_currentSender.isSystemRef)
     assertEquals(_currentSender.path, system.systemName)
-    assert(_currentThreadName.startsWith(s"${system.address.name}-default-"))
+    assert(_currentThreadName.startsWith(s"${system.address.name}-worker-pool-"))
   }
 
   test("create sub-actors") {
