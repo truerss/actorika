@@ -27,7 +27,7 @@ case class ActorSystem(systemName: String, settings: ActorSystemSettings) {
 
   private def createDefaultExecutor: Executor = {
     Executors.newFixedThreadPool(cores,
-      threadFactory(s"$systemName-worker-pool")
+      threadFactory(s"$systemName-worker")
     )
   }
 
