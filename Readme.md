@@ -18,7 +18,7 @@ val fooRef = system.spawn(new FooActor, "foo")
 system.send(fooRef, "test")
 ```
 
-#### Note: The library does not use `Props/Builder` for create actors, instead of this you need to define
+#### Note: The library does not use `Props/Builder` for creating actors, instead of this you need to define
 additional properties in `preStart` method:
   
 ```scala  
@@ -76,15 +76,6 @@ class MyActor extends Actor {
 
 ```
 
-### Custom Actor Names:
-
-```scala
-import io.truerss.actorika.ActorNameGenerator
-val generator = ActorNameGenerator("custom")
-
-system.spawn(new MyActor, generator)
-```
-
 ### Scheduler
 
 ```scala
@@ -119,7 +110,6 @@ class MyActor extends Actor {
 ### Strategies Description
 
 ```
-Parent -> will apply Parent strategy (by default)
 Stop   -> actor will be stopped
 Skip   -> message will be skipped
 Restart -> preRestart(), clear mailbox, stop Actor, call postStop, then start Actor again (preStart)   
