@@ -1,4 +1,4 @@
-package com.truerss.actorika
+package io.truerss.actorika
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ConcurrentLinkedQueue => CLQ, ConcurrentHashMap => CHM}

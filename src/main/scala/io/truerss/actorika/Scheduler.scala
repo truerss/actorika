@@ -1,4 +1,4 @@
-package com.truerss.actorika
+package io.truerss.actorika
 
 import org.slf4j.LoggerFactory
 

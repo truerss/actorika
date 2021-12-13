@@ -1,4 +1,4 @@
-package com.truerss.actorika
+package io.truerss.actorika
 
 object ActorStates extends Enumeration {
   type ActorState = Value

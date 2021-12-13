@@ -1,6 +1,6 @@
-package com.truerss.actorika.support
+package io.truerss.actorika.support
 
-import com.truerss.actorika.{ActorRef, ActorSystem}
+import io.truerss.actorika.{ActorRef, ActorSystem}
 
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration

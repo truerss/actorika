@@ -1,4 +1,4 @@
-package com.truerss
+package io.truerss
 
 package object actorika {
   object Kill

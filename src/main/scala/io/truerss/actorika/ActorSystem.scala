@@ -1,6 +1,6 @@
-package com.truerss.actorika
+package io.truerss.actorika
 
-import com.truerss.actorika.support._
+import io.truerss.actorika.support._
 import org.slf4j.LoggerFactory
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}

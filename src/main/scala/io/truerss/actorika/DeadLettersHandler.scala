@@ -1,4 +1,4 @@
-package com.truerss.actorika
+package io.truerss.actorika
 
 trait DeadLettersHandler {
   def handle(message: Any, to: ActorRef, from: ActorRef): Unit

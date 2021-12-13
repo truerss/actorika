@@ -1,4 +1,4 @@
-package com.truerss.actorika
+package io.truerss.actorika
 
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration

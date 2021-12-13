@@ -1,6 +1,6 @@
-package com.truerss.actorika.support
+package io.truerss.actorika.support
 
-import com.truerss.actorika.{ActorRef, DeadLettersHandler, DefaultDeadLettersHandler}
+import io.truerss.actorika.{ActorRef, DeadLettersHandler, DefaultDeadLettersHandler}
 
 private [actorika] trait DeadLettersSupport {
   private [actorika] var _deadLettersHandler: DeadLettersHandler =

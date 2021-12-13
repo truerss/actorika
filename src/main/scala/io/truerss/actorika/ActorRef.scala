@@ -1,4 +1,4 @@
-package com.truerss.actorika
+package io.truerss.actorika
 
 import java.util.concurrent.{ArrayBlockingQueue => ABQ}
 import scala.concurrent.{Future, Promise}

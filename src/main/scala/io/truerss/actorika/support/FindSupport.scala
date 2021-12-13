@@ -1,6 +1,6 @@
-package com.truerss.actorika.support
+package io.truerss.actorika.support
 
-import com.truerss.actorika.{Actor, ActorRef, ActorSystem}
+import io.truerss.actorika.{Actor, ActorRef, ActorSystem}
 
 import scala.jdk.CollectionConverters._
 
