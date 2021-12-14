@@ -24,6 +24,8 @@ case class ActorSystem(systemName: String, setup: ActorSetup = ActorSetup.defaul
 
   private final val defaultActorNameGenerator = ActorNameGenerator.default
 
+  val defaultExecutor: ExecutionContext = setup.defaultExecutor
+
   private val systemRunner = Executors.newCachedThreadPool(
     threadFactory(s"$systemName-runner")
   )
@@ -45,8 +47,6 @@ case class ActorSystem(systemName: String, setup: ActorSetup = ActorSetup.defaul
   start()
 
   private [actorika] var _onTerminationFunction = { () => }
-
-  val defaultExecutor: ExecutionContext = setup.defaultExecutor
 
   def registerOnTermination(f : () => Unit): Unit = {
     _onTerminationFunction = f
@@ -148,29 +148,4 @@ object ActorSystem {
   def threadFactory(name: String): ThreadFactory = {
     new ActorikaThreadFactory(s"$name-pool")
   }
-}
-
-
-case class ActorInitializationError(message: String) extends Exception
-
-case class ActorSetup(
-                       handleDeadLetters: Boolean,
-                       maxRestartCount: Int,
-                       defaultExecutor: ExecutionContext,
-                       exceptionOnStart: Boolean,
-                       defaultStrategy: ActorStrategies.Value,
-                       defaultMailboxSize: Int
-                     )
-
-object ActorSetup {
-  val default: ActorSetup = new ActorSetup(
-    handleDeadLetters = true,
-    maxRestartCount = 100,
-    defaultExecutor = ExecutionContext.fromExecutor(Executors.newCachedThreadPool(
-      ActorSystem.threadFactory("default-executor")
-    )),
-    exceptionOnStart = false,
-    defaultStrategy = ActorStrategies.Skip,
-    defaultMailboxSize = 100
-  )
 }

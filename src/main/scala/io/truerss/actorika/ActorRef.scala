@@ -11,6 +11,9 @@ case class ActorRef(
                    private[actorika] val system: ActorSystem,
                    private[actorika] val isSystemRoot: Boolean = false
                    ) {
+
+  val path: String = address.path
+
   def tell(message: Any, to: ActorRef): Unit = {
     val tmp = ActorTellMessage(
       message = message,
@@ -29,7 +32,8 @@ case class ActorRef(
     p.future
   }
 
-  def path: String = address.path
+
+  private[actorika] def clear(): Unit = mailBox.clear
 
   override def toString: String = {
     s"ActorRef(${address.path})"

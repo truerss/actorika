@@ -7,4 +7,6 @@ package object actorika {
   private [actorika] object StartAsk
 
   case class AskException(message: String) extends Exception
+
+  case class ActorInitializationError(message: String) extends Exception
 }

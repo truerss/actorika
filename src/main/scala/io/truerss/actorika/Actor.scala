@@ -21,17 +21,13 @@ trait Actor {
     _state = newState
   }
 
-  def applyStrategy(throwable: Throwable,
-                    failedMessage: Option[Any],
-                    restartCount: Int): ActorStrategies.Value = {
-    system.setup.defaultStrategy
-  }
-
   protected var _me: ActorRef = null
 
   protected def me: ActorRef = context.me
 
   private [actorika] def callMe: ActorRef = me
+
+  protected implicit def current: ActorRef = me
 
   private [actorika] var _context: Context = null
 
@@ -39,13 +35,29 @@ trait Actor {
 
   protected lazy val scheduler: Scheduler = system.scheduler
 
-  protected implicit def current: ActorRef = me
-
   protected def children: Iterable[ActorRef] = _children.asScala.values.map(_.me)
 
   protected def context: Context = _context
 
   protected def parent: ActorRef = _context.parent.me
+
+  private [actorika] val _children: CHM[Address, Actor] = new CHM[Address, Actor]()
+
+  private var _sender: ActorRef = null
+
+  protected def sender: ActorRef = _sender
+
+  private [actorika] var _executor: ExecutionContext = null
+
+  protected def executor: ExecutionContext = _executor
+
+  private var _sleepTimeMillis = 100L
+
+  protected def applyStrategy(throwable: Throwable,
+                    failedMessage: Option[Any],
+                    restartCount: Int): ActorStrategies.Value = {
+    system.setup.defaultStrategy
+  }
 
   def withExecutor(ec: ExecutionContext): Unit = {
     _executor = ec
@@ -54,8 +66,6 @@ trait Actor {
   private [actorika] def hasExecutor: Boolean = {
     _executor != null
   }
-
-  private [actorika] val _children: CHM[Address, Actor] = new CHM[Address, Actor]()
 
   private [actorika] def setContext(state: ActorStates.Value,
                                     parent: Actor,
@@ -70,23 +80,16 @@ trait Actor {
       me = me,
       system = system
     )
+    _sleepTimeMillis = system.setup.defaultWaitTime.toMillis
     if (parent != null) {
       parent._children.put(me.address, this)
     }
     _state = state
   }
 
-  private var _sender: ActorRef = null
-
   private [actorika] def setSender(ref: ActorRef): Unit = {
     _sender = ref
   }
-
-  protected def sender: ActorRef = _sender
-
-  private [actorika] var _executor: ExecutionContext = null
-
-  protected def executor: ExecutionContext = _executor
 
   private[actorika] def callPreStart(): Unit = preStart()
 
@@ -136,7 +139,7 @@ trait Actor {
     _state match {
       case ActorStates.Live =>
         while (isBusy) {
-          Thread.sleep(100) // todo from setup
+          Thread.sleep(_sleepTimeMillis)
         }
         val message = _me.mailBox.queue.take()
         tick(message)
@@ -145,7 +148,8 @@ trait Actor {
         ActorSystem.logger.warn(s"Actor ${me.path} is finished, messages (total=${me.mailBox.queue.size}) will be skipped")
 
       case _ =>
-        // todo unknown state warn
+        ActorSystem.logger.error(s"Actor ${me.path} is UnInitialized")
+        throw new IllegalStateException(s"$this can not handle messages in UnInitialized state")
     }
   }
 
@@ -243,7 +247,7 @@ trait Actor {
   protected def stop(): Unit = {
     setState(ActorStates.Finished)
     ActorSystem.logger.debug(s"Stop $this")
-    clearMailbox()
+    _me.clear()
     _children.forEach { (_, x) =>
       x.stop()
     }
@@ -260,10 +264,6 @@ trait Actor {
       case ex: Throwable =>
         onError(ex)
     }
-  }
-
-  private def clearMailbox(): Unit = {
-    me.mailBox.clear
   }
 
   override def toString: String = {
