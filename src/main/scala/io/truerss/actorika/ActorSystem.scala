@@ -22,6 +22,8 @@ case class ActorSystem(systemName: String, setup: ActorSetup = ActorSetup.defaul
 
   private final val askGen = new AtomicLong(0)
 
+  private final val defaultActorNameGenerator = ActorNameGenerator.default
+
   private val systemRunner = Executors.newCachedThreadPool(
     threadFactory(s"$systemName-runner")
   )
@@ -37,6 +39,14 @@ case class ActorSystem(systemName: String, setup: ActorSetup = ActorSetup.defaul
 
   def registerOnTermination(f : () => Unit): Unit = {
     _onTerminationFunction = f
+  }
+
+  def spawn(actor: Actor, generator: ActorNameGenerator): ActorRef = {
+    spawn(actor, generator.next())
+  }
+
+  def spawn(actor: Actor): ActorRef = {
+    spawn(actor, defaultActorNameGenerator.next())
   }
 
   def spawn(actor: Actor, name: String): ActorRef = {

@@ -91,6 +91,17 @@ class MyActor extends Actor {
 }  
 ```
 
+### Custom Actor Names:
+
+```scala
+import io.truerss.actorika.ActorNameGenerator
+val generator = new ActorNameGenerator("custom") {
+  override def next(): String = ???
+}
+
+system.spawn(new MyActor, generator)
+```
+
 ### Lifecycle
 
 ```scala
