@@ -4,18 +4,21 @@ import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
 
 private [actorika] object CommonActors {
-  def systemActor(setup: ActorSetup): Actor = new Actor {
-    override def applyStrategy(throwable: Throwable, failedMessage: Option[Any], restartCount: Int): ActorStrategies.Value = {
-      setup.defaultStrategy
-    }
+  def systemActor(setup: ActorSetup): Actor = {
+    new Actor {
 
-    override def receive: Receive = {
-      case message =>
-        onUnhandled(message)
-    }
+      override def applyStrategy(throwable: Throwable, failedMessage: Option[Any], restartCount: Int): ActorStrategies.Value = {
+        setup.defaultStrategy
+      }
 
-    override def onUnhandled(message: Any): Unit = {
-      ActorSystem.logger.warn(s"Unhandled message: $message")
+      override def receive: Receive = {
+        case message =>
+          onUnhandled(message)
+      }
+
+      override def onUnhandled(message: Any): Unit = {
+        ActorSystem.logger.warn(s"Unhandled message: $message")
+      }
     }
   }
 

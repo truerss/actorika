@@ -1,11 +1,7 @@
 package io.truerss.actorika
 
-import java.util.concurrent.{
-  ExecutorService,
-  Executors,
-  ConcurrentHashMap => CHM,
-  ConcurrentLinkedQueue => CLQ
-}
+import java.util.concurrent.{ConcurrentHashMap => CHM, ConcurrentLinkedQueue => CLQ}
+import scala.concurrent.ExecutionContext
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
@@ -21,8 +17,6 @@ trait Actor {
   @volatile
   private [actorika] var _currentReceive: Receive = receive
 
-
-
   private [actorika] def setState(newState: ActorStates.Value): Unit = {
     _state = newState
   }
@@ -33,25 +27,35 @@ trait Actor {
     system.setup.defaultStrategy
   }
 
-  private [actorika] var _me: ActorRef = null
+  protected var _me: ActorRef = null
 
-  def me: ActorRef = _context.me
+  protected def me: ActorRef = context.me
+
+  private [actorika] def callMe: ActorRef = me
 
   private [actorika] var _context: Context = null
 
   protected def system: ActorSystem = _context.system
 
-  protected def scheduler: Scheduler = system.scheduler
+  protected lazy val scheduler: Scheduler = system.scheduler
 
   protected implicit def current: ActorRef = me
 
   protected def children: Iterable[ActorRef] = _children.asScala.values.map(_.me)
 
-  private [actorika] def setMe(ref: ActorRef): Unit = {
-    _me = ref
+  protected def context: Context = _context
+
+  protected def parent: ActorRef = _context.parent.me
+
+  def withExecutor(ec: ExecutionContext): Unit = {
+    _executor = ec
   }
 
-  private [actorika] var _children: CHM[Address, Actor] = new CHM[Address, Actor]()
+  private [actorika] def hasExecutor: Boolean = {
+    _executor != null
+  }
+
+  private [actorika] val _children: CHM[Address, Actor] = new CHM[Address, Actor]()
 
   private [actorika] def setContext(state: ActorStates.Value,
                                     parent: Actor,
@@ -59,6 +63,7 @@ trait Actor {
                                     system: ActorSystem,
                                     name: String
                                  ): Unit = {
+    _me = me
     _context = Context(
       name = name,
       parent = parent,
@@ -79,15 +84,17 @@ trait Actor {
 
   protected def sender: ActorRef = _sender
 
-  private [actorika] var _executor: ExecutorService = Executors.newSingleThreadExecutor()
+  private [actorika] var _executor: ExecutionContext = null
 
-  def executor: ExecutorService = _executor
+  protected def executor: ExecutionContext = _executor
 
-  def preStart(): Unit = {}
-  def postStop(): Unit = {}
-  def preRestart(): Unit = {}
+  private[actorika] def callPreStart(): Unit = preStart()
 
-  def onUnhandled(message: Any): Unit = {}
+  protected def preStart(): Unit = {}
+  protected def postStop(): Unit = {}
+  protected def preRestart(): Unit = {}
+
+  protected def onUnhandled(message: Any): Unit = {}
 
   final protected def become(next: Receive): Unit = {
     _currentReceive = next
@@ -97,19 +104,19 @@ trait Actor {
 
   def receive: Receive
 
-  def subscribe[T](klass: Class[T]): Unit = {
+  protected [actorika] final def subscribe[T](klass: Class[T]): Unit = {
     subscriptions.add(klass)
   }
 
-  def unsubscribe[T](klass: Class[T]): Unit = {
+  protected [actorika] final def unsubscribe[T](klass: Class[T]): Unit = {
     subscriptions.remove(klass)
   }
 
-  def unsubscribe(): Unit = {
+  protected [actorika] final def unsubscribeAll(): Unit = {
     subscriptions.clear()
   }
 
-  def canHandle[T](v: T)(implicit kTag: ClassTag[T]): Boolean = {
+  private [actorika] def canHandle[T](v: T)(implicit kTag: ClassTag[T]): Boolean = {
     subscriptions.forEach { x =>
       if (x.isAssignableFrom(kTag.runtimeClass)) {
         return true
@@ -118,7 +125,7 @@ trait Actor {
     false
   }
 
-  protected def spawn(child: Actor, name: String): ActorRef = {
+  protected final def spawn(child: Actor, name: String): ActorRef = {
     _context.system.spawn(child, name, this)
   }
 
@@ -128,8 +135,10 @@ trait Actor {
   private [actorika] def tickMe(): Unit = {
     _state match {
       case ActorStates.Live =>
-        while (isBusy) {}
-        val message = me.mailBox.queue.take()
+        while (isBusy) {
+          Thread.sleep(100) // todo from setup
+        }
+        val message = _me.mailBox.queue.take()
         tick(message)
 
       case ActorStates.Finished =>
@@ -140,7 +149,7 @@ trait Actor {
     }
   }
 
-  def tick(message: ActorMessage, restartCount: Int = 0): Unit = {
+  private def tick(message: ActorMessage, restartCount: Int = 0): Unit = {
     setSender(message.from)
     isBusy = true
     val current = message.message
@@ -217,7 +226,21 @@ trait Actor {
     tick(message, count)
   }
 
-  private [actorika] def stop(): Unit = {
+  private[actorika] def callStop(): Unit = {
+    stop()
+  }
+
+  protected def stop(ref: ActorRef): Unit = {
+    Option(_children.get(ref.address)) match {
+      case Some(child) =>
+        child.stop()
+
+      case None =>
+        ActorSystem.logger.warn(s"Can not stop the actor: ${ref.address}")
+    }
+  }
+
+  protected def stop(): Unit = {
     setState(ActorStates.Finished)
     ActorSystem.logger.debug(s"Stop $this")
     clearMailbox()
@@ -230,7 +253,7 @@ trait Actor {
     }
   }
 
-  def call(f: () => Unit)(onError: Throwable => Unit): Unit = {
+  private def call(f: () => Unit)(onError: Throwable => Unit): Unit = {
     try {
       f.apply()
     } catch {
@@ -239,7 +262,7 @@ trait Actor {
     }
   }
 
-  private [actorika] def clearMailbox(): Unit = {
+  private def clearMailbox(): Unit = {
     me.mailBox.clear
   }
 
@@ -251,7 +274,7 @@ trait Actor {
 case class Context(
                     name: String,
                     parent: Actor,
-                    me: ActorRef,
+                    private[actorika] val me: ActorRef,
                     system: ActorSystem
                   ) {
   val address: Address = me.address

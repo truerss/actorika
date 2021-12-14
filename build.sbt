@@ -1,6 +1,6 @@
 name := "actorika"
 
-version := "0.0.1.2-SNAPSHOT"
+version := "0.0.1.10-SNAPSHOT"
 
 val scala213 = "2.13.6"
 val scala3 = "3.0.0"

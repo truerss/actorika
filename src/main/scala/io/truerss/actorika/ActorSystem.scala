@@ -4,8 +4,8 @@ import io.truerss.actorika.support._
 import org.slf4j.LoggerFactory
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
-import java.util.concurrent.{ArrayBlockingQueue => ABQ}
-import java.util.concurrent.{Executor, Executors, ThreadFactory}
+import java.util.concurrent.{Executors, ThreadFactory, ArrayBlockingQueue => ABQ}
+import scala.concurrent.ExecutionContext
 
 case class ActorSystem(systemName: String, setup: ActorSetup = ActorSetup.default)
   extends SubscriptionSupport
@@ -29,6 +29,15 @@ case class ActorSystem(systemName: String, setup: ActorSetup = ActorSetup.defaul
   )
 
   private [actorika] val systemActor = CommonActors.systemActor(setup)
+  systemActor.withExecutor(defaultExecutor)
+  systemActor.setContext(
+    state = ActorStates.Live,
+    name = s"$systemName-actor",
+    parent = null,
+    me = new ActorRef(Address(systemName), MailBox(1), this, isSystemRoot = true),
+    system = this
+  )
+
 
   private[actorika] val scheduler: Scheduler =
     new Scheduler(threadFactory(s"$systemName-scheduler"))
@@ -36,6 +45,8 @@ case class ActorSystem(systemName: String, setup: ActorSetup = ActorSetup.defaul
   start()
 
   private [actorika] var _onTerminationFunction = { () => }
+
+  val defaultExecutor: ExecutionContext = setup.defaultExecutor
 
   def registerOnTermination(f : () => Unit): Unit = {
     _onTerminationFunction = f
@@ -60,8 +71,11 @@ case class ActorSystem(systemName: String, setup: ActorSetup = ActorSetup.defaul
   private [actorika] def spawn(actor: Actor, name: String, parent: Actor): ActorRef = {
     val me = new ActorRef(Address(parent, name), MailBox(setup.defaultMailboxSize), this)
     actor.setContext(ActorStates.UnInitialized, parent, me, this, name)
+    if (!actor.hasExecutor) {
+      actor.withExecutor(defaultExecutor)
+    }
     try {
-      actor.preStart()
+      actor.callPreStart()
       actor.setState(ActorStates.Live)
       logger.debug(s"Start ${me.path} actor")
       me
@@ -77,13 +91,6 @@ case class ActorSystem(systemName: String, setup: ActorSetup = ActorSetup.defaul
   }
 
   def start(): Unit = {
-    systemActor.setContext(
-      state = ActorStates.Live,
-      parent = null,
-      me = new ActorRef(Address(systemName), MailBox(1), this, isSystemRoot = true),
-      system = this,
-      name = s"$systemName-actor"
-    )
     systemRunner.execute(() => {
       while (!isStopped) {
         val ref = delayQueue.take()
@@ -102,7 +109,7 @@ case class ActorSystem(systemName: String, setup: ActorSetup = ActorSetup.defaul
     logger.debug(s"Stop ${ref.path}")
     findMe(ref) match {
       case Some(ra) =>
-        ra.stop()
+        ra.callStop()
 
       case None =>
         logger.warn(s"You're trying to stop Actor(${ref.path}), which is not exist in ActorSystem($systemName)")
@@ -111,7 +118,7 @@ case class ActorSystem(systemName: String, setup: ActorSetup = ActorSetup.defaul
 
   def stop(): Unit = {
     logger.debug(s"Stop ActorSystem($systemName)")
-    systemActor.stop()
+    systemActor.callStop()
     systemRunner.shutdown()
     scheduler.stop()
     try {
@@ -149,7 +156,7 @@ case class ActorInitializationError(message: String) extends Exception
 case class ActorSetup(
                        handleDeadLetters: Boolean,
                        maxRestartCount: Int,
-                       defaultExecutor: Executor,
+                       defaultExecutor: ExecutionContext,
                        exceptionOnStart: Boolean,
                        defaultStrategy: ActorStrategies.Value,
                        defaultMailboxSize: Int
@@ -159,7 +166,9 @@ object ActorSetup {
   val default: ActorSetup = new ActorSetup(
     handleDeadLetters = true,
     maxRestartCount = 100,
-    defaultExecutor = null,
+    defaultExecutor = ExecutionContext.fromExecutor(Executors.newCachedThreadPool(
+      ActorSystem.threadFactory("default-executor")
+    )),
     exceptionOnStart = false,
     defaultStrategy = ActorStrategies.Skip,
     defaultMailboxSize = 100

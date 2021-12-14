@@ -71,7 +71,7 @@ class SubscriptionsTests extends Test {
     system.unsubscribe(ref, classOf[String]) // not present, but ...
     val tmp2Ref = system.findMe(ref)
     assert1(tmp2Ref.get.subscriptions.size == 1)
-    system.unsubscribe(ref)
+    system.unsubscribeAll(ref)
     val tmp3Ref = system.findMe(ref)
     assert1(tmp3Ref.get.subscriptions.size == 0)
     system.stop()

@@ -19,7 +19,7 @@ class AskTests extends Test {
     override def receive: Receive = {
       case x: Int =>
         println(s"fooActor ----> $x ${Thread.currentThread().getName}")
-        implicit val ec = ExecutionContext.fromExecutor(executor)
+        implicit val ec = executor
         val result = me.ask(x, barRef)(1.second)
         result.onComplete {
           case Success(value: Int) =>

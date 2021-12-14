@@ -7,7 +7,7 @@ import scala.jdk.CollectionConverters._
 private [actorika] trait FindSupport { self: ActorSystem =>
 
   def find(path: String): Option[ActorRef] = {
-    findActor(path).map(_.me)
+    findActor(path).map(_.callMe)
   }
 
   private [actorika] def findActor(path: String): Option[Actor] = {
@@ -26,7 +26,7 @@ private [actorika] trait FindSupport { self: ActorSystem =>
   }
 
   private [actorika] def findRealActor(ra: Actor, path: String): Option[Actor] = {
-    if (ra.me.address.is(path)) {
+    if (ra.callMe.address.is(path)) {
       Some(ra)
     } else {
       val chs = ra._children

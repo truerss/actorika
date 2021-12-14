@@ -80,7 +80,7 @@ class SchedulerTests extends Test {
     }
     task.clear()
     Thread.sleep(1000)
-    assert1(index.get() == 1, s"index=${index.get()}")
+    assert1(index.get() == 0, s"index=${index.get()}")
     sch.stop()
   }
 

@@ -7,9 +7,9 @@ import scala.concurrent.duration.FiniteDuration
 // ref ! ref -> mailbox -> actor
 case class ActorRef(
                    address: Address,
-                   mailBox: MailBox,
-                   system: ActorSystem,
-                   isSystemRoot: Boolean = false
+                   private[actorika] val mailBox: MailBox,
+                   private[actorika] val system: ActorSystem,
+                   private[actorika] val isSystemRoot: Boolean = false
                    ) {
   def tell(message: Any, to: ActorRef): Unit = {
     val tmp = ActorTellMessage(

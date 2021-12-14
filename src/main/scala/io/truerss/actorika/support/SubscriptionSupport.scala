@@ -26,7 +26,7 @@ private [actorika] trait SubscriptionSupport { self: ActorSystem =>
   }
 
   private def findMe(ra: Actor, ref: ActorRef): Option[Actor] = {
-    if (ra.me.address == ref.address) {
+    if (ra.callMe.address == ref.address) {
       Some(ra)
     } else {
       val chs = ra._children
@@ -56,9 +56,9 @@ private [actorika] trait SubscriptionSupport { self: ActorSystem =>
     }
   }
 
-  def unsubscribe(ref: ActorRef): Unit = {
+  def unsubscribeAll(ref: ActorRef): Unit = {
     findMe(ref).foreach { actor =>
-      actor.unsubscribe()
+      actor.unsubscribeAll()
     }
   }
 
@@ -72,7 +72,7 @@ private [actorika] trait SubscriptionSupport { self: ActorSystem =>
 
     if (handlers.isEmpty) {
       ActorSystem.logger.warn(s"Can not publish: ${message.getClass}, there are no actors to handle the message")
-      _deadLettersHandler.handle(message, systemActor.me, systemActor.me)
+      _deadLettersHandler.handle(message, systemActor.callMe, systemActor.callMe)
     } else {
       handlers.foreach { h =>
         systemActor._context.me.tell(message, h._context.me)
