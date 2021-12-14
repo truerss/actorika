@@ -7,11 +7,14 @@ abstract class ActorNameGenerator(val pattern: String) {
 }
 
 object ActorNameGenerator {
-  def create(pattern: String): ActorNameGenerator = new ActorNameGenerator(pattern) {
-    private final val defaultNameCounter = new AtomicLong(0)
+  def create(pattern: String): ActorNameGenerator = {
+    val tmp = pattern
+    new ActorNameGenerator(tmp) {
+      private final val defaultNameCounter = new AtomicLong(0)
 
-    override def next(): String = {
-      s"$pattern-${defaultNameCounter.getAndIncrement()}"
+      override def next(): String = {
+        s"$tmp-${defaultNameCounter.getAndIncrement()}"
+      }
     }
   }
 
